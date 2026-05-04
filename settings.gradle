@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        maven {
+            url = uri("https://maven.neoforged.net/releases")
+        }
+    }
+}
+
+rootProject.name = "universium"
+
+include("webcraft")
+project(":webcraft").projectDir = file("modules/webcraft")
+
+include("webcraft-proxy")
+project(":webcraft-proxy").projectDir = file("modules/webcraft-proxy")
+

@@ -1,0 +1,19 @@
+node_modules/
+build/
+dist/
+.cache/
+out/
+.gradle/
+.vscode/
+*.log
+logs/
+
+# WebCraft runtime and build artifacts
+modules/webcraft/frontend/node_modules/
+modules/webcraft/frontend/storybook-static/
+modules/webcraft/frontend/dist/
+modules/webcraft/run/
+modules/webcraft/config/webcraft.metadata
+modules/webcraft/config/webcraft-cache/
+config/webcraft.metadata
+config/webcraft-cache/

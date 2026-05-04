@@ -1,0 +1,61 @@
+plugins {
+    id "base"
+}
+
+allprojects {
+    group = "com.universium"
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: "java"
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
+
+tasks.register("runClient") {
+    group = "application"
+    description = "Runs the NeoForge client for the webcraft module."
+    dependsOn(":webcraft:runClient")
+}
+
+tasks.register("runServer") {
+    group = "application"
+    description = "Runs the NeoForge server for the webcraft module."
+    dependsOn(":webcraft:runServer")
+}
+
+tasks.register("buildDocs", Copy) {
+    group = "documentation"
+    description = "Collects Markdown documentation from project docs folders."
+
+    def sourceDirs = []
+    def rootDocs = file("docs")
+    if (rootDocs.exists()) {
+        sourceDirs << rootDocs
+    }
+
+    file("modules").listFiles()?.each { moduleDir ->
+        def moduleDocs = new File(moduleDir, "docs")
+        if (moduleDocs.exists() && moduleDocs.isDirectory()) {
+            sourceDirs << moduleDocs
+        }
+    }
+
+    from(sourceDirs) {
+        include("**/*.md")
+    }
+    into(layout.buildDirectory.dir("docs"))
+}
+
