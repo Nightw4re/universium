@@ -1,0 +1,93 @@
+plugins {
+    id "java"
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = findProperty("modVersion") ?: "0.1.0"
+def modId = "webcraft"
+def modName = "webcraft"
+def modLicense = "All Rights Reserved"
+def minecraftVersion = "1.21.1"
+def neoVersion = "21.1.224"
+def neoVersionRange = "[21.1.224,)"
+def minecraftVersionRange = "[1.21.1,1.21.2)"
+def loaderVersionRange = "[1,)"
+
+dependencies {
+}
+
+def frontendDir = layout.projectDirectory.dir("frontend")
+def webrootDir = layout.projectDirectory.dir("webroot")
+
+tasks.register("buildFrontend", Exec) {
+    group = "build"
+    description = "Builds the webcraft frontend workspace into webroot."
+    workingDir = frontendDir.asFile
+    commandLine = ["cmd", "/c", "npm", "run", "build"]
+    inputs.dir(frontendDir)
+    outputs.dir(webrootDir)
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    dependsOn(tasks.named("buildFrontend"))
+}
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter("5.10.2")
+        }
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def modVersion = project.version.toString()
+
+    inputs.properties([
+            mod_id: modId,
+            mod_name: modName,
+            mod_version: modVersion,
+            mod_license: modLicense,
+            minecraft_version: minecraftVersion,
+            neo_version: neoVersion,
+            neo_version_range: neoVersionRange,
+            minecraft_version_range: minecraftVersionRange,
+            loader_version_range: loaderVersionRange,
+    ])
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand([
+                mod_id: modId,
+                mod_name: modName,
+                mod_version: modVersion,
+                mod_license: modLicense,
+                minecraft_version: minecraftVersion,
+                neo_version: neoVersion,
+                neo_version_range: neoVersionRange,
+                minecraft_version_range: minecraftVersionRange,
+                loader_version_range: loaderVersionRange,
+        ])
+    }
+}
+
+neoForge {
+    version = project.findProperty("neo_version")
+    validateAccessTransformers = true
+
+    runs {
+        client {
+            client()
+            systemProperty "neoforge.enabledGameTestNamespaces", "webcraft"
+        }
+        server {
+            server()
+            programArgument "--nogui"
+        }
+    }
+
+    mods {
+        webcraft {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
