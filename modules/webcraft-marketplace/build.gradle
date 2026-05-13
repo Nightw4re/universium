@@ -1,0 +1,69 @@
+plugins {
+    id "java"
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = findProperty("modVersion") ?: "0.1.0"
+def modId = "webcraft-marketplace"
+def modName = "webcraft-marketplace"
+def modLicense = "All Rights Reserved"
+def minecraftVersion = "1.21.1"
+def neoVersion = "21.1.224"
+def neoVersionRange = "[21.1.224,)"
+def minecraftVersionRange = "[1.21.1,1.21.2)"
+def loaderVersionRange = "[1,)"
+
+dependencies {
+    implementation project(":webcraft")
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def modVersion = project.version.toString()
+
+    inputs.properties([
+            mod_id: modId,
+            mod_name: modName,
+            mod_version: modVersion,
+            mod_license: modLicense,
+            minecraft_version: minecraftVersion,
+            neo_version: neoVersion,
+            neo_version_range: neoVersionRange,
+            minecraft_version_range: minecraftVersionRange,
+            loader_version_range: loaderVersionRange,
+    ])
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand([
+                mod_id: modId,
+                mod_name: modName,
+                mod_version: modVersion,
+                mod_license: modLicense,
+                minecraft_version: minecraftVersion,
+                neo_version: neoVersion,
+                neo_version_range: neoVersionRange,
+                minecraft_version_range: minecraftVersionRange,
+                loader_version_range: loaderVersionRange,
+        ])
+    }
+}
+
+neoForge {
+    version = project.findProperty("neo_version")
+    validateAccessTransformers = true
+
+    runs {
+        client {
+            client()
+            systemProperty "neoforge.enabledGameTestNamespaces", "webcraft-marketplace"
+        }
+        server {
+            server()
+            programArgument "--nogui"
+        }
+    }
+
+    mods {
+        webcraftMarketplace {
+            sourceSet sourceSets.main
+        }
+    }
+}

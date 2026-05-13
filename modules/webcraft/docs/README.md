@@ -27,6 +27,8 @@ Recommended pages:
 - `frontend-architecture.md` - template, transport, and lifecycle model
 - `frontend-api.md` - addon API and extension hooks
 - `frontend-templates.md` - template ownership and versioning
+- `frontend-overrides.md` - default frontend, fallback, and pack override policy
+- `addon-modules.md` - addon module registration and shared API model
 - `frontend-ssl.md` - HTTPS and certificate handling
 - `frontend-conflicts.md` - how collisions are resolved
 - `troubleshooting.md` - common runtime issues

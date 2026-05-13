@@ -7,6 +7,7 @@ WebCraft frontend delivery is built around a small set of stable rules:
 - the active template is selected by config
 - each module or pack can provide its own named frontend template
 - the core module controls the runtime lifecycle and transport policy
+- `webroot/` is a generated runtime output directory and should not be treated as source control frontend input
 
 ## Core Goals
 
@@ -43,6 +44,7 @@ The recommended model is:
 - the core module publishes the active template state through a small Java interface
 - addons can react to that state without reading internal config files directly
 - the runtime copies or mounts the chosen template into the instance webroot when needed
+- the editable frontend source lives in `modules/webcraft/frontend/` and builds into the generated `webroot/` output
 
 This keeps the system stable while still allowing packs to fully own the final frontend composition.
 

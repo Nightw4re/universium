@@ -62,6 +62,8 @@ The wiki-ready docs live in [`docs/`](./docs/). Start with:
 - [`docs/frontend-architecture.md`](./docs/frontend-architecture.md)
 - [`docs/frontend-api.md`](./docs/frontend-api.md)
 - [`docs/frontend-templates.md`](./docs/frontend-templates.md)
+- [`docs/frontend-overrides.md`](./docs/frontend-overrides.md)
+- [`docs/addon-modules.md`](./docs/addon-modules.md)
 - [`docs/frontend-ssl.md`](./docs/frontend-ssl.md)
 - [`docs/frontend-conflicts.md`](./docs/frontend-conflicts.md)
 

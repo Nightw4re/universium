@@ -12,7 +12,10 @@ logs/
 modules/webcraft/frontend/node_modules/
 modules/webcraft/frontend/storybook-static/
 modules/webcraft/frontend/dist/
+modules/webcraft/webroot/
 modules/webcraft/run/
+modules/*/.eclipse/
+modules/*/bin/
 modules/webcraft/config/webcraft-http.lock
 modules/webcraft/config/webcraft.metadata
 modules/webcraft/config/webcraft-cache/

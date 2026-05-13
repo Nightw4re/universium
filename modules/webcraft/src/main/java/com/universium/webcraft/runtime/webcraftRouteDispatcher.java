@@ -38,6 +38,15 @@ public final class webcraftRouteDispatcher {
         if ("/resourcepacks".equals(effectiveRequest.path()) || "/resourcepacks.json".equals(effectiveRequest.path())) {
             return resourcePackManifest();
         }
+        List<webcraftRouteDefinition> addonRoutes = webcraftAddonRegistry.snapshotRoutes();
+        for (webcraftRouteDefinition route : addonRoutes) {
+            if (route.matches(effectiveRequest.method(), effectiveRequest.path())) {
+                webcraftResponse response = pipeline.execute(route, effectiveRequest);
+                if (!(response.status() == 404 && effectiveRequest.path().startsWith("/player-info/"))) {
+                    return response;
+                }
+            }
+        }
         for (webcraftRouteDefinition route : routes) {
             if (route.matches(effectiveRequest.method(), effectiveRequest.path())) {
                 webcraftResponse response = pipeline.execute(route, effectiveRequest);
