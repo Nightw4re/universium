@@ -1,0 +1,41 @@
+{
+  "name": "webcraft-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/clean-webroot.mjs && vite build",
+    "build:watch": "node scripts/clean-webroot.mjs && vite build --watch",
+    "clean:webroot": "node scripts/clean-webroot.mjs",
+    "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "test": "vitest run",
+    "test:backend-contract": "vitest run --config vitest.contract.config.ts",
+    "test:shield-snapshot": "vitest run --config vitest.shield-snapshot.config.ts",
+    "test:shield-snapshot:update": "vitest run --config vitest.shield-snapshot.config.ts --update",
+    "test:shield-utils": "vitest run --config vitest.shield-utils.config.ts",
+    "validate:app-data": "node scripts/validate-app-data.mjs",
+    "check:server-info-panel": "node scripts/check-server-info-panel.mjs"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^10.3.6",
+    "@storybook/addon-mcp": "^0.6.0",
+    "@storybook/addon-vitest": "^10.3.6",
+    "@storybook/react-vite": "^10.3.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitest/browser": "^3.2.4",
+    "jsdom": "^26.1.0",
+    "playwright": "^1.60.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "storybook": "^10.3.6",
+    "typescript": "^5.8.3",
+    "vite": "^6.4.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "react-router-dom": "^6.30.3"
+  }
+}
