@@ -1,6 +1,6 @@
 # WebCraft Frontend
 
-This repository contains the standalone WebCraft frontend override.
+This directory contains the TypeScript frontend for the WebCraft module in Universium.
 
 ## What lives here
 
@@ -12,8 +12,7 @@ This repository contains the standalone WebCraft frontend override.
 
 ## Working rules
 
-- Keep the project Java-free.
-- Work only in this repository unless explicitly told to touch another project.
+- Keep frontend source in this workspace and Java source in the WebCraft backend.
 - Develop the project using component-driven development (CDD) and test-driven development (TDD).
 - Prefer React Storybook stories and MCP-backed workflows for UI work.
 - Prefer small reusable components over page-specific markup.

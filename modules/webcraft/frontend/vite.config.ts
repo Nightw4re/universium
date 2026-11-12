@@ -6,8 +6,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"]
   },
   build: {
-    outDir: process.env.BUILD_OUT_DIR ?? "C:/Users/lkroc/projects/universium/modules/webcraft/webroot",
-    emptyOutDir: true,
+    outDir: process.env.BUILD_OUT_DIR ?? "dist",
     rollupOptions: {
       output: {
         manualChunks(id) {

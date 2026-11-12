@@ -16,20 +16,42 @@ def loaderVersionRange = "[1,)"
 dependencies {
 }
 
-def frontendDir = layout.projectDirectory.dir("frontend")
-def webrootDir = layout.projectDirectory.dir("webroot")
+def frontendDir = layout.projectDirectory.dir("frontend").asFile
+def frontendDist = new File(frontendDir, "dist")
+def webrootDir = layout.buildDirectory.dir("webroot")
+def npmCommand = System.getProperty("os.name").startsWith("Windows") ? ["cmd", "/d", "/c", "npm.cmd"] : ["npm"]
+
+tasks.register("installFrontendDependencies", Exec) {
+    group = "build"
+    description = "Installs the locked npm dependencies for the WebCraft frontend."
+    workingDir = frontendDir
+    commandLine = npmCommand + ["ci"]
+    inputs.files(new File(frontendDir, "package.json"), new File(frontendDir, "package-lock.json"))
+    outputs.dir(new File(frontendDir, "node_modules"))
+}
 
 tasks.register("buildFrontend", Exec) {
     group = "build"
-    description = "Builds the webcraft frontend workspace into webroot."
-    workingDir = frontendDir.asFile
-    commandLine = ["cmd", "/c", "npm", "run", "build"]
-    inputs.dir(frontendDir)
-    outputs.dir(webrootDir)
+    description = "Builds the WebCraft frontend into frontend/dist."
+    dependsOn(tasks.named("installFrontendDependencies"))
+    workingDir = frontendDir
+    commandLine = npmCommand + ["run", "build", "--", "--outDir", "dist"]
+    inputs.files(fileTree(frontendDir) {
+        exclude("node_modules/**", "dist/**", "storybook-static/**", ".tmp-mc-sources/**", "coverage/**", ".vite/**", "**/*.log")
+    })
+    outputs.dir(frontendDist)
+}
+
+tasks.register("syncFrontendWebroot", Sync) {
+    group = "build"
+    description = "Copies the built frontend artifact into the build webroot."
+    dependsOn(tasks.named("buildFrontend"))
+    from(frontendDist)
+    into(webrootDir)
 }
 
 tasks.named("processResources", ProcessResources).configure {
-    dependsOn(tasks.named("buildFrontend"))
+    dependsOn(tasks.named("syncFrontendWebroot"))
 }
 
 testing {

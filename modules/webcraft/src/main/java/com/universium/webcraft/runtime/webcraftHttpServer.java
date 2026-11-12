@@ -546,6 +546,9 @@ public final class webcraftHttpServer {
                 Path.of("..", "..").resolve(configured),
                 Path.of("modules", "webcraft", "webroot"),
                 Path.of("webroot"),
+                Path.of("modules", "webcraft", "build", "webroot"),
+                Path.of("build", "webroot"),
+                Path.of("..", "build", "webroot"),
                 Path.of("src", "main", "resources", "webroot")
         };
         for (Path candidate : candidates) {

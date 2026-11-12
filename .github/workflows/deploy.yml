@@ -51,6 +51,13 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - uses: actions/setup-node@v4
+        if: matrix.module == 'webcraft'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: modules/webcraft/frontend/package-lock.json
+
       - name: Build module
         run: gradle :${{ matrix.module }}:build
 
