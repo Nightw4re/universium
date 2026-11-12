@@ -19,6 +19,9 @@ This directory contains the TypeScript frontend for the WebCraft module in Unive
 - Treat `src/config.ts` as the shared source of truth for navigation and runtime defaults.
 - Keep stories isolated and representative of the real UI.
 - Do not commit build artifacts such as `dist/` or `storybook-static/`.
+- Reuse shared components and expose explicit variants when callers need a different appearance. Let parents control placement and let each component own its internal selectors and responsive styles. Reserve `!important` for cases that need an intentional override and document the reason.
+- Add or update stories for new reusable components and views. Cover relevant states and user interactions with Storybook `play` tests when applicable.
+- Keep animation timing and state transitions in one place. Exercise meaningful completion and interruption behavior in interaction tests using stable state markers rather than transient frames.
 
 ## Common commands
 
@@ -28,6 +31,12 @@ This directory contains the TypeScript frontend for the WebCraft module in Unive
 - `npm run storybook`
 - `npm run build-storybook`
 - `npm run test`
+
+## Verification
+
+- Run the relevant Vitest or Storybook checks for changed behavior and group related browser checks in one invocation. Use unit tests for pure logic and focused interaction tests for UI behavior. Type-check affected TypeScript when changing code that can affect types.
+- Run `npm run build` when production output, assets, runtime dependencies or build configuration can change. Run `npm run build-storybook` when Storybook configuration or its build dependencies change or when a distributable preview is requested.
+- Verify both sides of a changed WebCraft HTTP contract. Report separately whether a live backend was available for the contract check.
 
 ## Notes for contributors
 
