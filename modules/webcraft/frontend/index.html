@@ -1,14 +1,90 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <title>WebCraft Frontend</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
-  
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>WebCraft</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <span class="mark" aria-hidden="true">W</span>
+    <span>WebCraft</span>
+    <nav aria-label="WebCraft views">
+      <a href="#equipment" id="equipment-link">Equipment</a>
+      <a href="#items" id="catalog-link">Items</a>
+      <a href="#banners" id="banners-link">Banners</a>
+      <a href="#armor" id="armor-link">Armor trims</a>
+    </nav>
+  </header>
+  <main>
+    <div id="equipment-view">
+    <section class="intro">
+      <div>
+        <h1>Equipment</h1>
+        <p>See the armor and items your character has equipped in Minecraft.</p>
+      </div>
+      <form id="access" autocomplete="off">
+        <label for="token">Viewer token</label>
+        <div class="controls">
+          <input id="token" type="password" required minlength="43" maxlength="128" spellcheck="false">
+          <button type="submit">View equipment</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="equipment" aria-labelledby="character">
+      <div class="section-heading">
+        <h2 id="character">Character loadout</h2>
+        <p id="status" role="status">Enter your viewer token to load equipment.</p>
+      </div>
+      <ul id="slots" class="slots"></ul>
+    </section>
+    </div>
+
+    <div id="catalog-view" class="catalog" hidden>
+      <section id="catalog-index" aria-labelledby="items-heading">
+      <h1 id="items-heading">Items</h1>
+      <div class="catalog-controls">
+        <label>Search items
+          <input id="item-search" type="search" placeholder="Name or item ID" autocomplete="off" spellcheck="false" disabled>
+        </label>
+        <label>Game or mod
+          <select id="item-mod" disabled>
+            <option value="">All items</option>
+          </select>
+        </label>
+      </div>
+      <p id="catalog-status" role="status"></p>
+      <ul id="item-grid" class="item-grid"></ul>
+      <button id="more-items" type="button" hidden>Show more</button>
+      </section>
+      <section id="item-detail" class="item-detail" aria-labelledby="detail-name" hidden>
+        <a class="back-link" href="#items">← All items</a>
+        <p id="detail-status" role="status"></p>
+        <div id="detail-body" class="detail-body" hidden>
+          <div id="detail-picture" class="item-picture"></div>
+          <div>
+            <h1 id="detail-name" tabindex="-1"></h1>
+            <p id="detail-id" class="item-id"></p>
+            <div id="variant-controls" class="catalog-controls"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <section id="banners-view" class="design-page" aria-labelledby="banners-heading" hidden>
+      <h1 id="banners-heading">Banner editor</h1>
+      <p class="design-status" role="status"></p>
+      <div class="design-content"></div>
+    </section>
+    <section id="armor-view" class="design-page" aria-labelledby="armor-heading" hidden>
+      <h1 id="armor-heading">Armor trims</h1>
+      <p class="design-status" role="status"></p>
+      <div class="design-content"></div>
+    </section>
+  </main>
+</body>
 </html>

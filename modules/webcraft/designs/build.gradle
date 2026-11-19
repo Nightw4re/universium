@@ -1,0 +1,40 @@
+plugins {
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = property("modVersion")
+def coreProject = project(":webcraft-core")
+def neoForgeVersion = coreProject.property("neoVersion")
+
+dependencies {
+    implementation coreProject
+}
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter("5.10.2")
+        }
+    }
+}
+
+neoForge {
+    version = neoForgeVersion
+    addModdingDependenciesTo sourceSets.test
+    mods {
+        webcraft_core {
+            sourceSet coreProject.sourceSets.main
+        }
+        webcraft_designs {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def metadata = [mod_version: project.version.toString(), neo_version: neoForgeVersion]
+    inputs.properties(metadata)
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(metadata)
+    }
+}

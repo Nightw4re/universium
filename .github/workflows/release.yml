@@ -1,0 +1,40 @@
+name: Release WebCraft frontend
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Universium
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Package the WebCraft frontend
+        run: gradle bundleWebCraftFrontend
+
+      - name: Generate checksum
+        run: sha256sum frontend-dist.zip > frontend-dist.zip.sha256
+        working-directory: build/distributions
+
+      - name: Create GitHub Release and upload assets
+        working-directory: build/distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            frontend-dist.zip \
+            frontend-dist.zip.sha256 \
+            --title "WebCraft frontend ${GITHUB_REF_NAME}" \
+            --notes "WebCraft frontend for ${GITHUB_REF_NAME}"

@@ -17,8 +17,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: modules/webcraft/frontend/package-lock.json
 
       - name: Run tests
-        run: gradle test
+        run: gradle test bundleWebCraftFrontend
+
+      - name: Check frontend JavaScript
+        run: |
+          for script in modules/webcraft/frontend/*.mjs; do
+            node --check "$script" || exit
+          done
+
+      - name: Run frontend tests
+        run: node --test modules/webcraft/frontend/test/*.test.mjs

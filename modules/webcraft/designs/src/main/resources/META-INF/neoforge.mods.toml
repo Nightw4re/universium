@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="webcraft_designs"
+version="${mod_version}"
+displayName="WebCraft Design Data"
+authors="Universium"
+description="Serves exported banner and armor trim data to WebCraft clients."
+
+[[dependencies.webcraft_designs]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_designs]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_designs]]
+modId="webcraft_core"
+type="required"
+versionRange="[0.1.0,0.2.0)"
+ordering="AFTER"
+side="BOTH"

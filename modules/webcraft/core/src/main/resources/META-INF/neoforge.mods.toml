@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="webcraft_core"
+version="${mod_version}"
+displayName="WebCraft Core"
+authors="Universium"
+description="Shared module registration and private REST access for WebCraft."
+
+[[dependencies.webcraft_core]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_core]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"

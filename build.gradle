@@ -26,14 +26,27 @@ subprojects {
 
 tasks.register("runClient") {
     group = "application"
-    description = "Runs the NeoForge client for the webcraft module."
-    dependsOn(":webcraft:runClient")
+    description = "Runs the NeoForge client with the WebCraft preview exporter."
+    dependsOn(":webcraft-exporter:runClient")
 }
 
 tasks.register("runServer") {
     group = "application"
-    description = "Runs the NeoForge server for the webcraft module."
-    dependsOn(":webcraft:runServer")
+    description = "Runs the NeoForge server with WebCraft Core."
+    dependsOn(":webcraft-core:runServer")
+}
+
+tasks.register("bundleWebCraftFrontend", Zip) {
+    group = "build"
+    description = "Packages the static WebCraft frontend for independent hosting."
+    archiveFileName = "frontend-dist.zip"
+    destinationDirectory = layout.buildDirectory.dir("distributions")
+    reproducibleFileOrder = true
+    preserveFileTimestamps = false
+    from("modules/webcraft/frontend") {
+        include "index.html", "style.css", "*.mjs"
+        exclude "dev.mjs", "local.mjs"
+    }
 }
 
 tasks.register("buildDocs", Copy) {

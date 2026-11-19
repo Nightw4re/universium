@@ -1,6 +1,6 @@
 # WebCraft Wiki
 
-This folder contains wiki-ready documentation for WebCraft.
+This folder preserves historical documentation for WebCraft Origin. See the [active WebCraft guide](../../../modules/webcraft/README.md) for current configuration and contracts.
 
 Important layout rule:
 
@@ -25,6 +25,7 @@ Recommended pages:
 - `routes.md` - HTTP route examples and binding model
 - `logging.md` - access and error logs
 - `frontend-architecture.md` - template, transport, and lifecycle model
+- [`frontend-contract.md`](frontend-contract.md) - original frontend item render contract
 - `frontend-api.md` - addon API and extension hooks
 - `frontend-templates.md` - template ownership and versioning
 - `frontend-overrides.md` - default frontend, fallback, and pack override policy

@@ -1,0 +1,55 @@
+plugins {
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = property("modVersion")
+def neoForgeVersion = property("neoVersion")
+def swaggerUiVersion = "5.34.1"
+
+configurations {
+    swaggerUiAssets {
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    swaggerUiAssets("org.webjars:swagger-ui:${swaggerUiVersion}")
+}
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter("5.10.2")
+        }
+    }
+}
+
+neoForge {
+    version = neoForgeVersion
+    addModdingDependenciesTo sourceSets.test
+    mods {
+        webcraft_core {
+            sourceSet sourceSets.main
+        }
+    }
+    runs {
+        server {
+            server()
+            gameDirectory = rootProject.file(".local-artifacts/webcraft-core/server")
+            programArgument "--nogui"
+        }
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def metadata = [mod_version: project.version.toString(), neo_version: neoForgeVersion]
+    inputs.properties(metadata)
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(metadata)
+    }
+    from({ zipTree(configurations.swaggerUiAssets.singleFile) }) {
+        includeEmptyDirs = false
+        include "**/swagger-ui-bundle.js", "**/swagger-ui-bundle.js.LICENSE.txt", "**/swagger-ui.css"
+        eachFile { details -> details.path = "webcraft-api/" + details.name }
+    }
+}

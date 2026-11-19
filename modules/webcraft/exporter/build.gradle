@@ -1,0 +1,38 @@
+plugins {
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = property("modVersion")
+def neoForgeVersion = project(":webcraft-core").property("neoVersion")
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter("5.10.2")
+        }
+    }
+}
+
+neoForge {
+    version = neoForgeVersion
+    addModdingDependenciesTo sourceSets.test
+    mods {
+        webcraft_exporter {
+            sourceSet sourceSets.main
+        }
+    }
+    runs {
+        client {
+            client()
+            gameDirectory = rootProject.file(".local-artifacts/webcraft-exporter/client")
+        }
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def metadata = [mod_version: project.version.toString(), neo_version: neoForgeVersion]
+    inputs.properties(metadata)
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(metadata)
+    }
+}

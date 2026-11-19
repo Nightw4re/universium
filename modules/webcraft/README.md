@@ -1,553 +1,184 @@
-# webcraft
+# WebCraft
 
-webcraft is the Universium module that provides shared HTTP and realtime web infrastructure for Minecraft servers and connected mods.
+WebCraft exposes Minecraft server data over a shared HTTP API. Players can connect with their regular modpack client. The original bridge is available in the [WebCraft Origin archive](../../archive/webcraft-origin/README.md).
 
-It is responsible for exposing a web-facing runtime that can serve static assets, forward API requests, and stream live events between the server and a browser-based frontend.
+| Directory | Gradle project | NeoForge mod ID |
+| --- | --- | --- |
+| [Core](core) | `:webcraft-core` | `webcraft_core` |
+| [Equipment](equipment) | `:webcraft-equipment` | `webcraft_equipment` |
+| [Item Catalog](catalog) | `:webcraft-catalog` | `webcraft_catalog` |
+| [Design Data](designs) | `:webcraft-designs` | `webcraft_designs` |
+| [Preview Exporter](exporter) | `:webcraft-exporter` | `webcraft_exporter` |
 
-## Purpose
+The [reference frontend](frontend/README.md) is an independent web client.
 
-webcraft exists to make it possible for Minecraft server logic and other mods to integrate with:
+## Install on a dedicated server
 
-- web dashboards
-- SPA applications
-- PWA applications
-- admin panels
-- companion tools
+Build the Java 21 mods from the Universium root. The modules target Minecraft 1.21.1 and build and test against NeoForge 21.1.230, the minimum runtime version. The declared range also includes NeoForge 21.1.249.
 
-The module focuses on transport and delivery. It does not own game rules or gameplay data models.
-
-The embedded HTTP server is intentionally lightweight. For hardened public deployments, it is recommended to keep it internal and place it behind a reverse proxy such as nginx, Apache, or a similar fronting service.
-
-For item and block thumbnails, the web runtime can use a web-specific resource-pack fallback order that is configured in TOML. If `server.resource_packs_web_order` is left empty, the web uses the same pack order it already reads from `resourcepacks.txt`. If it is filled, only the listed packs are used and they are applied in that exact order for the web preview pipeline.
-
-Static web asset delivery under `/resources/*` is cacheable. By default it uses a seven-day max-age and an ETag that changes with each HTTP server start. The TTL can be adjusted in TOML with `server.resources_cache_max_age_seconds`.
-
-The current browser surface is split into two layers:
-
-- `/api/*` for REST and resource delivery
-- everything else for the SPA shell
-
-The editable frontend lives in `modules/webcraft/frontend/` and builds back into `webroot/`, so the module still ships as one package while giving the UI a dedicated workspace.
-
-## Development Target
-
-webcraft is primarily developed for NeoForge 1.21.1 build 224.
-
-The runtime config is not development-only. Pack authors and server owners can use the same TOML options in normal installs, including startup port handling and stale-process cleanup.
-
-The frontend is split into a separate workspace under `modules/webcraft/frontend/`, but its build output still lives in `modules/webcraft/webroot/`, so it remains part of the module and ships with the mod.
-
-In development, the mod can be launched with:
-
-- `gradle :webcraft:runClient`
-- `gradle :webcraft:runServer`
-
-When the NeoForge dev environment starts, webcraft also starts its HTTP runtime using the current TOML bindings.
-
-Quickstart:
-
-1. Run `gradle :webcraft:runClient`.
-2. Open `http://127.0.0.1:8087/server-info`.
-3. Open `http://127.0.0.1:8087/player-info/00000000-0000-0000-0000-000000000001/`.
-4. Use `gradle :webcraft:runServer` if you want the dedicated server dev target instead.
-
-## Documentation
-
-The wiki-ready docs live in [`docs/`](./docs/). Start with:
-
-- [`docs/README.md`](./docs/README.md)
-- [`docs/quickstart.md`](./docs/quickstart.md)
-- [`docs/configuration.md`](./docs/configuration.md)
-- [`docs/routes.md`](./docs/routes.md)
-- [`docs/frontend-architecture.md`](./docs/frontend-architecture.md)
-- [`docs/frontend-api.md`](./docs/frontend-api.md)
-- [`docs/frontend-templates.md`](./docs/frontend-templates.md)
-- [`docs/frontend-overrides.md`](./docs/frontend-overrides.md)
-- [`docs/addon-modules.md`](./docs/addon-modules.md)
-- [`docs/frontend-ssl.md`](./docs/frontend-ssl.md)
-- [`docs/frontend-conflicts.md`](./docs/frontend-conflicts.md)
-
-## Core Capabilities
-
-### HTTP Server
-
-webcraft provides an embedded HTTP server for:
-
-- module-specific API routes
-- status endpoints
-- authenticated requests
-- static asset delivery
-
-### HTTP Delivery
-
-webcraft can serve files required by browser applications, including:
-
-- HTML entry files
-- JavaScript bundles
-- CSS assets
-- icons and manifests
-- service worker files
-
-On first run, webcraft also creates a module-specific configuration folder for the user.
-
-That folder contains default HTML delivery files and frontend templates that can be customized by the modpack creator.
-The exact file structure and defaults will be defined later, but the intent is that pack authors can adapt the web UI to match their own branding and workflow.
-
-### Webroot Layout
-
-The shipped frontend lives in `webroot/`.
-
-That folder is intended to be a pure browser asset root, so it can be replaced or extended by:
-
-- the core module
-- a proxy module
-- a mod-specific adapter
-- a modpack override
-
-The current front-end stack uses only:
-
-- HTML
-- CSS
-- modern browser JavaScript
-
-No frontend framework is required.
-
-### Frontend Workspace
-
-The editable frontend source now lives in `frontend/`.
-
-Use it like this:
-
-1. `cd modules/webcraft/frontend`
-2. `npm install`
-3. `npm run build`
-4. The build writes the optimized frontend back into `../webroot`
-
-The runtime server still serves `webroot/` directly, so the built frontend remains part of the module package.
-
-### Frontend Config
-
-The frontend loads a layered config from `webroot/app.config.js`.
-
-The base config is declared in `webroot/app.config.base.js` and may be extended by other modules through:
-
-- `window.WEBCRAFT_MODULE_CONFIGS`
-- `window.WEBCRAFT_PROXY_CONFIG`
-
-Merge order:
-
-1. base config
-2. module configs
-3. proxy config
-4. final frozen config exposed as `window.WEBCRAFT_CONFIG`
-
-This makes it possible for modules such as `webcraft-proxy` to:
-
-- change route targets
-- rename UI sections
-- add new frontend metadata
-- inject alternate delivery paths
-- override theme values
-
-### SPA Module Model
-
-The frontend is now driven by a generated manifest:
-
-- `webroot/webcraft.manifest.json`
-- `index.html` stays the shell entrypoint
-- core JS loads first and resolves the manifest
-- active modules register navigation and content blocks
-- module entries may also expose `path`, `entryScript`, `styles`, and `scripts`
-- the core loader will add those assets before rendering the active module
-
-If no module is active, the shell falls back to a hello / 404 view.
-
-For a full authoring contract, see:
-
-- [`modules/webcraft/docs/spa-modules.md`](/c:/Users/lkroc/projects/universium/modules/webcraft/docs/spa-modules.md)
-
-### Addon Contract
-
-Addons should extend the frontend by adding only the parts they need.
-
-The core frontend exposes config slots for:
-
-- `ui.sidebarItems`
-- `ui.topbarActions`
-- `ui.heroFacts`
-- `ui.detailFacts`
-- `ui.homeBlocks`
-- `ui.detailBlocks`
-- some fact slots can be rendered as named components, starting with `server-info` and `uptime`
-
-An addon can layer in just one or two entries instead of replacing the whole shell.
-
-Example:
-
-```js
-window.WEBCRAFT_MODULE_CONFIGS = [
-  {
-    ui: {
-      sidebarItems: [
-        { id: "overview", label: "Přehled", icon: "overview", active: true },
-        { id: "players", label: "Hráči", icon: "players" },
-        { id: "auth", label: "Auth", icon: "settings" }
-      ],
-      topbarActions: [
-        { id: "reload", label: "Reload" }
-      ],
-      detailBlocks: [
-        { id: "equipmentGrid", title: "Current loadout", eyebrow: "Equipment", type: "equipment" },
-        { id: "inventoryGrid", title: "Main inventory", eyebrow: "Inventory", type: "inventory" },
-        { id: "playerStats", title: "REST fields", eyebrow: "Stats", type: "stats" }
-      ]
-    }
-  }
-];
+```sh
+gradle :webcraft-core:build :webcraft-equipment:build :webcraft-catalog:build :webcraft-designs:build
 ```
 
-This keeps core layout stable while letting addons patch only one section.
-
-Example:
-
-```js
-window.WEBCRAFT_MODULE_CONFIGS = [
-  {
-    ui: {
-      title: "Custom WebCraft",
-      accent: "#66cc88"
-    },
-    api: {
-      playerList: "/player-list"
-    }
-  }
-];
-
-window.WEBCRAFT_PROXY_CONFIG = {
-  api: {
-    playerListOnline: "/players/online"
-  }
-};
-```
-
-When running from NeoForge dev directories, the default `webroot_dir` is relative to the runtime working directory and usually points to `../webroot`.
-
-### Header Control
-
-The module supports configurable response headers so it can work correctly with SPA and PWA frontends.
-
-Typical uses include:
-
-- cache-control tuning
-- content security policy headers
-- CORS-related headers
-- PWA-related headers
-- route-specific header overrides
-
-### API Request Layer
-
-webcraft exposes an API layer for creating and routing HTTP requests toward module handlers.
-
-This allows modules to define:
-
-- request methods
-- request metadata
-- route matching
-- response generation
-- error handling
-
-### WebSocket Support
-
-webcraft provides WebSocket interfaces for realtime communication.
-
-Typical uses include:
-
-- live server events
-- player-specific updates
-- frontend state synchronization
-- module notifications
-
-## Built-in Modules
-
-webcraft includes small built-in modules that expose ready-made HTTP APIs and frontend delivery assets.
-
-The first built-in module will expose player state as JSON.
-
-### Player Info Module
-
-This module is named `player-info`.
-
-It returns structured information about a requested player, including:
-
-- total played time on the server
-- equipped items
-- main hand item
-- off hand item
-- inventory contents
-- ender chest contents
-- complete item data, including NBT
-
-The endpoint is addressed by player name in the URL, for example:
-
-`/player-info/nightware6/`
-
-The same data must be consumable through:
-
-- XHR / fetch requests
-- WebSocket request and livestream flow
-
-Authentication will be added later.
-
-At that point, the logged-in player's operator level will control whether additional data is visible, such as:
-
-- coordinates
-- dimension
-
-The module also provides a dedicated `webroot/*` delivery folder with frontend files for loading the API response and rendering it in the browser.
-
-This is the default frontend for the module. A separate proxy/customization module can later be added so modpack authors can alter the delivered UI more freely.
-
-By default, each module that ships static content should get its own folder inside `webroot/` as a template layout.
-
-That makes it easier to:
-
-- keep module assets separated
-- replace only one module's frontend
-- copy a module's default frontend into a custom version
-- let server owners edit module-specific files without touching unrelated delivery assets
-
-## External Module Registration
-
-webcraft must also provide a registration system for other mods.
-
-This allows a server owner or mod author to:
-
-- reuse an existing webcraft module but replace the HTTP API logic
-- keep the original frontend and only swap backend behavior
-- keep the backend and replace the frontend with a custom one
-- register a module that has no frontend at all
-- register a module that exists only as a custom frontend or adapter layer
-
-In practice, this makes webcraft a modular bridge platform rather than a fixed set of hard-coded features.
-
-Examples of supported setups:
-
-- authentication module with custom REST behavior but default frontend
-- authentication module with custom REST behavior and custom frontend
-- authentication adapter with no frontend
-- fully custom module registered into webcraft's module system
-
-### Proposed Module Model
-
-The registration system should be transport-agnostic.
-
-A module can expose one or more of these transports:
-
-- HTTP REST API
-- WebSocket channels
-- static frontend delivery
-
-For the first version, a module should preferably have one primary transport and optionally a second one.
-
-That keeps the system simple while still allowing the later combination of:
-
-- REST only
-- WebSocket only
-- REST plus WebSocket
-- REST plus frontend
-- WebSocket plus frontend
-- fully custom module layouts
-
-### Authenticated Access
-
-webcraft should attach session state to requests and use it to decide what data is visible.
-
-The intended baseline is:
-
-- unauthenticated visitors see only public information
-- authenticated users see their own linked account data
-- admins see extended data such as advanced player details
-
-The session should be sent with requests and reflected in the web frontend as the server account currently linked to the browser session.
-
-### Player Info Access
-
-The built-in `player-info` module should use the same session model.
-
-Its access model should be:
-
-- public viewers get basic player information
-- authenticated players get their own linked data
-- admins get advanced information such as coordinates and dimension
-
-This access split should be driven by session identity and server-side role or operator level checks.
-
-## Lifecycle Model
-
-webcraft should not hard-code its runtime state too early.
-
-The startup flow should be staged:
-
-1. Bootstrap
-2. Overlay and override collection
-3. Finalize
-4. Start runtime services
-
-### Bootstrap
-
-webcraft loads its default config, default built-in modules, and default webroot delivery assets.
-
-At this point, nothing should be permanently locked.
-
-### Overlay and Override Collection
-
-Other mods and modpack layers can then:
-
-- register new modules
-- remap routes before finalization
-- replace REST routes
-- replace WebSocket listeners
-- override headers
-- override webroot delivery
-- override frontend manifests
-- merge or replace config values
-
-### Handler Model
-
-webcraft should treat TOML as a binding layer, not as request logic itself.
-
-Every route should point to a declared handler reference.
-
-The first supported handler types should be:
-
-- `java`
-- `mcfunction`
-
-Routes should also support:
-
-- `middleware`
-- `fallback`
-- `error handlers`
-
-Examples:
+1. Put the core JAR from `core/build/libs/` into the server's `mods/` directory, plus the Equipment, Item Catalog or Design Data JARs for the modules you want to enable. The add-on JARs depend on the core.
+2. Start the server once to generate `<level-name>/serverconfig/webcraft-server.toml`, then stop the server and edit the file. Use the UUID the server assigns to a player who has agreed to share their equipment with the token holder.
+3. Generate a random 32-byte secret, for example with `openssl rand -hex 32`. Pass it to the server process as `WEBCRAFT_VIEWER_TOKEN`. The accepted format is 43 to 128 URL-safe ASCII characters. Share the token privately with its intended viewer.
+4. Optionally install a [preview pack exported by a Minecraft client](#export-inventory-previews). For a basic vanilla fallback, put the official Minecraft 1.21.1 client JAR at `webcraft-assets/client.jar`, relative to the server working directory. Item details are available without either archive.
+5. Restart the server after changing settings or the token. Join with the selected player, [start the reference frontend](frontend/README.md), and enter the token.
 
 ```toml
-[route."GET /server-info"]
-type = "java"
-ref = "webcraft.serverInfo"
-
-[route."GET /player-info/{uuid}"]
-type = "mcfunction"
-ref = "webcraft/player_info"
-
-[[route."GET /player-info/{uuid}".middleware]]
-type = "java"
-ref = "webcraft.authRequired"
-
-[route."GET /player-info/{uuid}".fallback]
-type = "java"
-ref = "webcraft.playerInfoFallback"
-
-[route."GET /player-info/{uuid}".errors."401"]
-type = "java"
-ref = "webcraft.unauthorized"
-
-[route."GET /player-info/{uuid}".errors."403"]
-type = "java"
-ref = "webcraft.forbidden"
+listenerEnabled = true
+bindAddress = "127.0.0.1"
+port = 8765
+enabledModules = ["webcraft_equipment:equipment", "webcraft_catalog:items", "webcraft_designs:banners", "webcraft_designs:armor"]
+viewerUuid = "00000000-0000-0000-0000-000000000000"
 ```
 
-In this model:
+Replace the example UUID. The listener defaults to off, with an empty module list and no authorized viewer. Keep the loopback bind for a proxy on the same network namespace. With `listenerEnabled = false`, the embedded REST service is unavailable. An external HTTP adapter would need its own integration with the game server.
 
-- `java` means the route is handled by a Java implementation
-- `mcfunction` means the route is handled by a Minecraft function reference
-- `ref` identifies the concrete target to invoke
-- `middleware` runs before the main handler and can transform the request or stop processing
-- `fallback` is used when the primary handler target is unavailable or fails validation
-- `errors."401"` and `errors."403"` are status-specific error handlers
+### Upgrade a previous preview installation
 
-Middleware can be chained when a route needs multiple processing steps.
+1. Stop the server and replace the former `webcraft-next-*.jar` files with the matching `webcraft-*.jar` files. Replace the preview exporter separately on any client that uses it.
+2. Copy the previous world's `serverconfig/webcraft-next-server.toml` to `serverconfig/webcraft-server.toml` unless the destination already exists. In `enabledModules`, change the prefix `webcraft_next_` to `webcraft_` for WebCraft's built-in modules.
+3. Rename `WEBCRAFT_NEXT_VIEWER_TOKEN` to `WEBCRAFT_VIEWER_TOKEN` in the server process environment, keeping the existing token value. Upgrade the frontend together with the server. Integrations can rediscover current routes through `GET /api/v1/modules`. Update any hard-coded module IDs and endpoint paths to the new namespaces.
 
-Fallbacks are especially useful when a referenced mod or function is missing, or when a proxy layer needs to replace a broken target with a safe alternative.
+Existing v1 export archives still work, including design manifests from the former namespace. The optional frontend stays off by default. Use the [development launch command](frontend/README.md) to start it locally.
 
-Status-specific error handlers are useful for cases like:
+## Export inventory previews
 
-- `401 Unauthorized`, when a session is missing or invalid
-- `403 Forbidden`, when the session exists but does not have permission
+Build the optional exporter with `gradle :webcraft-exporter:build` and put its JAR from `exporter/build/libs/` in the Minecraft client's `mods/` directory. The exporter runs separately from the server mods and uses the installed modpack and active client resource packs.
 
-If a status-specific error handler is not configured, webcraft should fall back to the default route error response.
+1. Open a world in the same modpack. You can use a singleplayer world or join the server to export specific items that already exist there.
+2. Run the client command `/webcraft export`. Choose **Export inventory** to capture the exact stacks currently in your inventory, or **Export item catalog and inventory** to also capture the catalog, banner patterns, and armor trim textures. The inventory and catalog renders are processed in small batches.
+3. Take `webcraft-exports/previews.zip` from the client instance and install it as `webcraft-assets/previews.zip` in the server working directory. Keep the archive out of Git and the public static web directory. Each successful export replaces the previous client archive. Include all the inventory variants you want in a new export before replacing the server copy.
 
-This keeps the request model extensible while still allowing modpack creators to override routing without rewriting core logic.
+The client calls Minecraft's ordinary GUI item renderer in the loaded world. This includes any renderer that NeoForge selects for the stack. The export saves a transparent 64 × 64 PNG at three pixels per GUI unit, with the item's inventory pose intact. When the rendered model uses animated atlas sprites, the exporter samples the inventory render on successive client ticks for one combined loop. This includes game-interpolated frames and active resource pack overrides. Identical consecutive samples share one frame whose duration is the sum of their ticks.
 
-### Finalize
+The exporter samples combined loops of up to 160 ticks (8 seconds), in batches of up to four stacks. Longer combinations, motion driven by custom renderers outside the baked-quad path, and item models that change selection with world or player state may need dedicated adapters. The ordinary static export remains available for supported, visible renders. The shared enchantment glint recipe is independent of atlas animations.
 
-webcraft composes the final runtime view from all layers and then freezes the active registry state.
+Pack v1 contains `format.txt` with `webcraft-previews-v1/1.21.1` followed by a newline and `previews/<key>.png` entries. Optional `animations/<key>.png` entries are looping APNGs with explicit frame durations in 1/20-second ticks. Older packs with only static PNGs still work. The key is the SHA-256 of the UTF-8 text produced by Minecraft's sorted SNBT serialization of the exact stack, including count and data components. The dedicated server computes the key from the live stack and reads the pre-rendered image. The archive contains PNGs and hashed keys, so no serialized item data is distributed. Re-export after changing model or resource packs. Export a specific inventory stack when its appearance depends on its components.
 
-### Runtime Controls
+## Wings and HTTPS
 
-webcraft should expose lifecycle controls for administration:
+Assign a second TCP allocation to the Minecraft server in Pterodactyl Wings and set `port` to that allocation's port. Bind on the appropriate container interface or use `0.0.0.0` inside the container when the proxy reaches it through the published allocation. Restrict the allocation to the reverse proxy or a private network at the host or firewall. Use a private or otherwise protected connection for the HTTP hop carrying viewer tokens. [Wings allocation documentation](https://docs.pterodactyl.io/v1/wings/installing#node-allocations)
 
-- `start`
-- `stop`
-- `restart`
-- `reload`
+Serve the static frontend from the HTTPS web origin and forward `/api/v1/` from that origin to the WebCraft listener. Preserve the request path and the `Authorization` header, disable proxy and CDN caching for those routes, and keep credentials out of access logs. Apply request limits at the proxy. The frontend and game server can run on different machines. The proxy, DNS provider and certificate setup are independent of the mod.
 
-These controls should:
+Equipment uses single-viewer private access. Anyone who holds the token can read the configured player's currently equipped items, including custom item names. Removing the UUID or rotating the token and restarting revokes access. A public player-facing equipment rollout needs account authentication, a verified mapping from accounts to player UUIDs and server-side visibility and consent controls. The enabled-module list and Item Catalog expose public metadata only.
 
-- be permission-gated
-- be audit logged
-- reapply the staged registry model
-- rebind HTTP routes and WebSocket listeners when needed
+## REST v1
 
-`reload` should re-read config and overlay state.
+The API accepts GET on exact paths and sends `Cache-Control: no-store`. Discovery is public whenever the listener is on. Private routes and discovery reject query parameters.
 
-`restart` should stop the runtime and start it again from the current staged configuration.
+### Server information
 
-`stop` should shut down HTTP and WebSocket services cleanly.
+With the listener enabled, opt in to public server information in `webcraft-server.toml`. Set the display name and Minecraft connection address if you want to publish them. A blank value omits that field. The Minecraft address is what players enter to join, including a port if needed. The HTTP bind address and port are independent.
 
-`start` should bring the runtime up from the finalized configuration.
+```toml
+apiDocsEnabled = true
 
-### Proxy Layers
+[serverInfo]
+enabled = true
+name = "Copycraft"
+joinAddress = "play.example.com"
+publishPlayersOnline = true
 
-A proxy module, such as `webcraft-proxy`, can sit in the overlay stage and remap routes before finalization.
+[serverInfo.modpack]
+publishName = true
+publishVersion = true
+source = "AUTO"
+```
 
-That means it can:
+Put `apiDocsEnabled` at the top level alongside `listenerEnabled`. The server-info route, Swagger UI and each field are off or blank by default. Restart the server after changing the settings or installing a modpack update. Add `apiDocsEnabled = true` to serve Swagger UI at `/api/v1/docs` and its OpenAPI document at `/api/v1/openapi.json`. The UI is self-hosted and shows the core routes and enabled module routes. Private routes still require the viewer token. The detailed module contracts are documented below.
 
-- move a route to a different path
-- replace one module's handler with another
-- disable a route entirely
-- preserve the original frontend while pointing it at new backend targets
+`GET /api/v1/server-info` is public when enabled, accepts no query parameters, and returns the selected fields as JSON. `playersOnline` comes from the running Minecraft server and can be `0`. Hidden or unavailable fields are omitted, and `modpack` is omitted when neither of its fields can be published.
 
-This is the main mechanism for compatibility and server-owner customization.
+```json
+{
+  "serverName": "Copycraft",
+  "joinAddress": "play.example.com",
+  "playersOnline": 0,
+  "modpack": { "name": "All the Mods 10", "version": "8.1" }
+}
+```
 
-## Intended Interfaces
+Modpack metadata is resolved once at server startup when either modpack field is enabled. `AUTO` tries the following sources in order and uses the first complete name and version. Versions are strings, so values such as `8.1` and `0.15.0-beta` retain their original formatting.
 
-webcraft is expected to provide interfaces and services for:
+| Source | Metadata read |
+| --- | --- |
+| `BCC_RUNTIME` | The name and version already resolved by the running Better Compatibility Checker, when installed and compatible. |
+| `BCC_TOML` | `config/bcc-common.toml`, used by ATM10 and Craftoria. If `general.useMetadata` is true, this source reads `config/metadata.json`. |
+| `BCC_JSON` | `config/bcc-common.json` with `modpackName.value` and `modpackVersion.value`. If `useMetadata.value` is true, this source reads `config/metadata.json`. ATM11 is a sample of this format on a newer Minecraft version. |
+| `METADATA_JSON` | `config/metadata.json` with `name` and `version.name`, as shipped by FTB Skies 2 and FTB StoneBlock 4. |
+| `PACKWIZ` | A local packwiz `pack.toml` with `name` and `version`. The file must be present in the server installation. |
 
-- HTTP request routing
-- HTTP response generation
-- header customization
-- static file delivery
-- websocket channel registration
-- websocket message handling
-- auth-aware request processing
-- module registration
-- frontend manifest delivery
+Set `source` to a specific identifier to use only that source. `CURSEFORGE_MANIFEST` reads a local `manifest.json` from a CurseForge export when selected explicitly. Use it if the server installer keeps that file and updates it with the installed version. A manually selected source that cannot be read leaves the modpack fields absent and reports the failure in the server log.
 
-## Scope
+For a different layout, select `CUSTOM` in `[serverInfo.modpack]` and set `file`, `nameKey` and `versionKey`. Use a JSON or TOML file relative to the instance directory, with dot-separated paths to string values. For example, `file = "config/pack-info.json"`, `nameKey = "pack.name"` and `versionKey = "pack.version"` read the two properties from a nested `pack` object. If the installation has no suitable metadata, its build or installer can write this file on each upgrade.
 
-webcraft is infrastructure, not gameplay logic.
+### Module discovery and routes
 
-Modules that use webcraft are responsible for:
+```http
+GET /api/v1/modules
+```
 
-- validating game actions
-- applying permissions
-- deciding which data is safe to expose
-- calling their own service layer
+```json
+{
+  "modules": [
+    {
+      "id": "webcraft_equipment:equipment",
+      "routes": {
+        "loadout": "/api/v1/modules/webcraft_equipment/equipment/loadout"
+      }
+    }
+  ]
+}
+```
 
-webcraft only provides the bridge between the Minecraft side and the web side.
+```http
+GET /api/v1/modules/webcraft_equipment/equipment/loadout
+Authorization: Bearer <viewer-token>
+```
 
-## Versioning
+The response has a `player` name and a `slots` array containing `head`, `chest`, `legs`, `feet`, `mainhand` and `offhand`. Each entry has a `slot` and a nullable `item`. An occupied slot has the item `id`, display `name`, stack `count` and `preview`.
 
-The module version is defined in `gradle.properties`.
+| Preview type | Fields and rendering |
+| --- | --- |
+| `sprite` | `png` contains a base64-encoded client-rendered icon or a single-layer vanilla item texture. Optional `animation` contains a base64-encoded APNG for the exact exported stack. |
+| `layered` | `base` and `overlay` contain base64-encoded PNGs, and `tint` is the RGB integer applied only to the base. |
+| `cube` | `faces.up`, `faces.north`, `faces.east` contain the visible face PNGs of an unrotated, opaque full cube with the standard inventory pose. |
+| `missing` | `reason` reports unavailable assets, an unsupported model or unsupported stack state. Show the item label and an explicit missing preview. |
 
+Exported exact-stack icons take precedence over the built-in vanilla fallback. The fallback supports single-layer icons, standard opaque cubes and untrimmed vanilla leather armor. When drawing leather armor, the web client tints the base with the stack's dye color and draws the static overlay on top. Other special or modded variants can use an exported icon. If an icon is unavailable, the item still appears with its name.
+
+Error responses contain an `error` code. A missing or incorrect token returns `401 unauthorized`, absent viewer configuration returns `403 viewer_access_disabled`, a disabled or absent module returns `404 not_found`, and a disconnected viewer returns `404 player_offline`. A server thread that cannot respond in time returns `503 server_busy`.
+
+With Item Catalog enabled, `GET /api/v1/modules/webcraft_catalog/items/items` lists the registered item IDs, display names and whether an optional default icon is indexed. `GET /api/v1/modules/webcraft_catalog/items/icon?id=minecraft%3Astone` serves an indexed PNG, or `404 preview_not_found`. Both catalog routes are public. Catalog names and icons come from `catalog.json` inside a full client export. The catalog lists registered items even when a preview is missing and reads the export index at server startup. Install an updated archive before restarting the server. Item data captured from individual inventories is available only through the private Equipment route.
+
+Click an item to open its catalog detail. `GET /api/v1/modules/webcraft_catalog/items/detail?id=<item-id>` exposes the exported variants and selector options. Request an indexed variant with `&variant=<variant-id>` on the icon route. The full export covers the registered Easy Villagers biome types and professions and the vanilla dye palette for stacks tagged as dyeable, including Nano and Quantum Nano armor in Extended Industrialization. A complete set of sixteen separately registered color-prefixed items is linked as a color family, including any registered undyed default. Applied Energistics 2 cable families use the registered Fluix item as their default. Selecting a family member shows its own item ID and exported icon.
+
+Append `&animated=1` after the item ID and optional variant to request the APNG when available. The route falls back to the static PNG and responds with `image/png` in both cases. The reference frontend plays animations in catalog tiles, item details and equipment when the browser allows motion. The catalog's optional glint simulation uses the static icon as its mask.
+
+The Easy Villagers breeder detail offers separate **Biome type** and **Profession** selectors for each slot. Either slot can be empty. The exporter populates the same block entity data used by the mod's dropped item and captures each registered combination in each slot with the game's item renderer. The server combines the two slot renders into a single downloadable PNG. A complete breeder stack with additional data can also be rendered directly by exporting it from the player's inventory, for use in Equipment.
+
+Use the breeder's `villager_1/<biome-id>/<profession-id>` or `villager_2/<biome-id>/<profession-id>` variant ID to request one occupied slot. For both, join the two indexed variant IDs in slot order with a URL-encoded plus (`%2B`) in the `variant` parameter. Omit `variant` for the empty breeder. For example, `/api/v1/modules/webcraft_catalog/items/icon?id=easy_villagers%3Abreeder&variant=villager_1%2Fminecraft%3Aplains%2Fminecraft%3Afarmer%2Bvillager_2%2Fminecraft%3Adesert%2Fminecraft%3Alibrarian` serves a complete PNG with both villagers.
+
+`GET /api/v1/modules/webcraft_catalog/items/effects` serves shared visual metadata from `effects.json`. The client exports the active item glint texture and the standard glint transform, timing and blend settings once. The web detail animates the glint in screen space over the selected icon, using the icon's opacity as its mask. This reproduces the standard effect as a 2D preview. Exact placement on 3D surfaces and renderer-specific shader replacements depend on the item's original geometry or shader.
+
+### Banner and armor design data
+
+The Design Data JAR registers two independently configurable public modules. Each exposes GET `data` and `texture?hash=<sha256>` beneath its discovered route prefix. No player data is needed. The JSON contract has `version: 1`. Texture properties hold content hashes. A module can serve only PNGs listed in its own exported manifest. An enabled module without an applicable export returns `404 design_export_missing` on the data route.
+
+- `webcraft_designs:banners` exposes the banner base and cloth textures, front-face UV rectangle, dye palette, six-layer loom limit, and registered loom patterns with usable sprites. Each pattern's `templates` array lists the item IDs accepted for that layer. An empty array means the loom accepts the pattern without a template.
+- `webcraft_designs:armor` exposes supported vanilla armor items, base texture layers with an optional tint, trim patterns and materials, and texture profiles referenced by each piece. Profiles use the actual atlas sprite for each pattern and material, including armor-material overrides and the separate leggings sprites. Its separate GET `geometry` route serves baked classic and slim player models, their skin overlays, and the worn armor meshes for `head`, `chest`, `legs` and `feet` from `armor_geometry.json`. Mesh arrays contain consecutive quads with eight values per vertex in position, UV and normal order. The `data` projection remains available for front views when geometry or WebGL is unavailable. Custom armor models require separate export support.
+- GET `skin?name=<Java-player-name>` on the armor module looks up the player's published skin using Minecraft's official profile, session and texture services. It returns a JSON object with `name`, `slim` and a base64 PNG. The server uses HTTPS for all requests. The route accepts Java Edition usernames and caches successful results for two minutes.
+
+A full export stores the manifests under `designs/webcraft_designs/` and shares content-addressed PNGs under `textures/`. The client resolves the active resource pack and current world's registered patterns. An older pack remains valid for inventory and catalog previews. A new full export is needed to enable the design views.
+
+The banner manifest can also include `slotPreviews.banner` and `slotPreviews.shield`. Each supplies 64 × 64 base renders keyed by dye ID and neutral pattern overlays keyed by pattern ID. These frames are captured in the inventory pose, with separate shield artwork and geometry. Tint each overlay with its selected dye and composite it in the original layer order. Shader blending and PNG quantization can produce small differences from a complete stack captured in one pass.
+
+## Add-on API
+
+An add-on listens for [`RegisterWebCraftModulesEvent`](core/src/main/java/com/universium/webcraft/api/RegisterWebCraftModulesEvent.java) on its mod event bus. It supplies a unique module ID and a map from route names to read handlers. The core publishes enabled routes under `/api/v1/modules/<namespace>/<module>/<route>`. Private handlers run on HTTP workers with the UUID already resolved by the core. Schedule live Minecraft reads on the game thread and serialize the captured data off that thread. Add-ons can explicitly register a `WebCraftReadRoute.PublicRoute` for public data such as the item catalog.
+
+To check the REST contract and compare returned previews against the original textures, run the build with `-PwebcraftTestAssets=/path/to/1.21.1.jar`.

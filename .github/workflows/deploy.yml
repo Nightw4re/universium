@@ -23,8 +23,8 @@ jobs:
         id: modules
         shell: bash
         run: |
-          changed_modules=$(git diff --name-only HEAD~1 HEAD -- 'modules/*/gradle.properties' \
-            | awk -F/ 'NF >= 3 { print $2 }' \
+          changed_modules=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'modules/webcraft/*/gradle.properties' \
+            | awk -F/ 'NF == 4 && $3 ~ /^(core|equipment|exporter|catalog|designs)$/ { print "webcraft-" $3 }' \
             | sort -u \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')
           if [ "$changed_modules" = "[]" ]; then
@@ -51,13 +51,6 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: actions/setup-node@v4
-        if: matrix.module == 'webcraft'
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: modules/webcraft/frontend/package-lock.json
-
       - name: Build module
         run: gradle :${{ matrix.module }}:build
 
@@ -65,7 +58,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.module }}-build
-          path: modules/${{ matrix.module }}/build/**
+          path: modules/webcraft/*/build/libs/${{ matrix.module }}-*.jar
+          if-no-files-found: error
 
   deploy-curseforge:
     needs: [detect, build]

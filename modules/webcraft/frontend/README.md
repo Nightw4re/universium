@@ -1,35 +1,19 @@
-# webcraft-frontend
+# WebCraft reference frontend
 
-WebCraft frontend for the Universium Minecraft mod.
+This static site discovers the [WebCraft REST API](../README.md#rest-v1). The Equipment view sends the viewer token in the request header and keeps it in the current page only. The Items view at `/#items` browses the public registry catalog when the module is enabled. It filters by game or mod and by name or ID, and loads icons as cards come into view.
 
-## Structure
+The optional design views use the [banner and armor data modules](../README.md#banner-and-armor-design-data). At `/#banners`, choose a cloth color and add, recolor, reorder or remove loom layers. The view shows the required template items and downloadable previews of the cloth, the banner in its inventory pose, and a shield decorated with the same design.
 
-- [`AGENTS.md`](AGENTS.md) frontend working notes
-- `src/app.ts` SPA shell composition
-- `src/config.ts` shared runtime configuration
-- `src/components/` reusable UI components
-- `src/stories/` Storybook stories for the components
-- `.storybook/` Storybook configuration
+At `/#armor`, each suit has a table with an armor material, trim material and pattern for each of its four slots. Drag either 3D preview in any direction, use its arrow keys, or jump to the front or back. Load a published skin by Java Edition player name, or choose a local 64 × 64 or legacy 64 × 32 PNG. Local skins stay in the browser. **Copy look link** saves both suits, the view angle and the selected public profile in the URL. Each view can be downloaded as PNG. Older exports and browsers without WebGL use the front view. Both design views work independently of the Items and Equipment views.
 
-## Development
+For local use, enable the Minecraft server's WebCraft listener and run this from the Universium root with Node.js 20 or later.
 
-Run `npm ci` in this directory before using npm scripts. Vite builds into `dist/`. From the Universium root, `gradle :webcraft:syncFrontendWebroot` installs the locked dependencies, builds the frontend, and copies the result to `modules/webcraft/build/webroot/`.
+```sh
+node modules/webcraft/frontend/dev.mjs
+```
 
-## Scripts
+Open `http://127.0.0.1:4173/`. The development command enables the preview by default. It serves the static files and forwards `/api/v1/` to `http://127.0.0.1:8765`. Override those ports with `WEBCRAFT_DEV_PORT` and `WEBCRAFT_API_PORT`.
 
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
-- `npm run storybook`
-- `npm run build-storybook`
-- `npm run test`
+The preview service (`local.mjs`) is off by default. Set `WEBCRAFT_FRONTEND_ENABLED=true` in its environment to enable it. Set it to `false` to disable the preview even when using the development command. The disabled service exits without opening its HTTP port. Restart the preview process to apply the change. The Minecraft HTTP listener and configured modules keep serving their API routes, including images, at the API origin.
 
-## Development notes
-
-- Keep build outputs out of git.
-- Use Storybook for UI review before wiring a component into `src/app.ts`.
-- Prefer shared data in `src/config.ts` when a value is used by multiple components.
-- This workspace uses React Storybook with component-driven development and test-driven development.
-- When Storybook is running, the MCP endpoint is available at `http://localhost:6006/mcp`.
-- Historical notes about discarded icon rendering approaches live in [docs/icon-render-decisions.md](docs/icon-render-decisions.md).
-- Research note: for a future WebGL renderer, first map the vanilla client item render pipeline; there is no drop-in public Java library for a full 1:1 modern vanilla item renderer without a client runtime.
+For independent hosting, use the static release ZIP or run `gradle bundleWebCraftFrontend` from the repository root to create `build/distributions/frontend-dist.zip`. It contains the HTML, CSS and browser JavaScript. Configure the same HTTPS origin to forward `/api/v1/` to WebCraft as described in the [deployment notes](../README.md#wings-and-https). Serve `.mjs` files with a JavaScript MIME type. To disable a preview hosted this way, disable static file delivery in the web host configuration and keep the API forwarding rule active. The site has no frontend build step or third-party browser dependencies.

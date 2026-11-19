@@ -1,6 +1,6 @@
 # webcraft-marketplace
 
-`webcraft-marketplace` is a WebCraft addon module.
+Historical prototype for WebCraft Origin. The active build omits this module.
 
 It does not start its own HTTP server.
 

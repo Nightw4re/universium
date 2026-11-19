@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="webcraft_catalog"
+version="${mod_version}"
+displayName="WebCraft Item Catalog"
+authors="Universium"
+description="Lists registered items and serves exported inventory previews to WebCraft."
+
+[[dependencies.webcraft_catalog]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_catalog]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_catalog]]
+modId="webcraft_core"
+type="required"
+versionRange="[0.1.0,0.2.0)"
+ordering="AFTER"
+side="BOTH"

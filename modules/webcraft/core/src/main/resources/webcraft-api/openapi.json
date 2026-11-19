@@ -1,0 +1,44 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "WebCraft API", "version": "1" },
+  "paths": {
+    "/api/v1/modules": {
+      "get": {
+        "summary": "List enabled modules and their routes",
+        "responses": { "200": { "description": "Module discovery document" } }
+      }
+    },
+    "/api/v1/server-info": {
+      "get": {
+        "summary": "Get public Minecraft server information",
+        "responses": {
+          "200": {
+            "description": "Only published and available fields are included",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServerInfo" } } }
+          },
+          "400": { "description": "Query parameters are unsupported" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "viewerToken": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "ServerInfo": {
+        "type": "object",
+        "properties": {
+          "serverName": { "type": "string", "example": "Copycraft" },
+          "joinAddress": { "type": "string", "example": "play.example.com" },
+          "playersOnline": { "type": "integer", "minimum": 0, "example": 0 },
+          "modpack": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "example": "All the Mods 10" },
+              "version": { "type": "string", "example": "8.1" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
