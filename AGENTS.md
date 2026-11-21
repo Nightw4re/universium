@@ -1,6 +1,6 @@
 # Universium repository guidance
 
-Universium is a Minecraft mod monorepo targeting Java 21, Minecraft 1.21.1 and NeoForge. Read [AI.md](AI.md) for the existing architecture, code and commit conventions. The [repository README](README.md) describes the project layout. The [WebCraft guide](modules/webcraft/README.md) covers active contracts and runtime configuration. The [frontend guide](modules/webcraft/frontend/README.md) covers the independent web client. Historical Origin material lives in [the archive](archive/webcraft-origin/README.md).
+Universium is a Minecraft mod monorepo targeting Java 21, Minecraft 1.21.1 and NeoForge. Read [AI.md](AI.md) for the existing architecture, code and commit conventions. The [repository README](README.md) describes the project layout. The [WebCraft guide](modules/webcraft/README.md) covers active contracts and runtime configuration. The [frontend guide](modules/webcraft/frontend/README.md) covers the independent web client.
 
 ## Shared checkout and Git
 

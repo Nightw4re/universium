@@ -1,39 +1,38 @@
 # WebCraft
 
-WebCraft exposes Minecraft server data over HTTP and WebSocket on the same port. Players can connect with their regular modpack client. The original bridge is available in the [WebCraft Origin archive](../../archive/webcraft-origin/README.md).
+WebCraft exposes Minecraft server data over HTTP and WebSocket on the same port. Players can connect with their regular modpack client. Install WebCraft and choose the optional add-ons you need. Each add-on is a separate NeoForge mod JAR that depends on WebCraft and registers one or more API modules.
 
-| Directory | Gradle project | NeoForge mod ID |
-| --- | --- | --- |
-| [WebCraft](core) (includes the [preview exporter](exporter)) | `:webcraft-core` | `webcraft_core` |
-| [Equipment](equipment) | `:webcraft-equipment` | `webcraft_equipment` |
-| [Item Catalog](catalog) | `:webcraft-catalog` | `webcraft_catalog` |
-| [Design Data](designs) | `:webcraft-designs` | `webcraft_designs` |
-| [FTB Quests](#ftb-quests) | `:webcraft-quests` | `webcraft_quests` |
-| [Ponder](ponder) | `:webcraft-ponder` | `webcraft_ponder` |
+| Mod | Purpose | Gradle project | NeoForge mod ID | Entries for `enabledModules` |
+| --- | --- | --- | --- | --- |
+| [WebCraft](core) | HTTP and WebSocket API, built-in server and player feeds including [advancements](#advancements), and the [client preview exporter](#export-inventory-previews) | `:webcraft-core` | `webcraft_core` | Built-in feeds use their own settings |
+| [Equipment](equipment) | Authenticated view of a selected online player's equipment | `:webcraft-equipment` | `webcraft_equipment` | `webcraft_equipment:equipment` |
+| [Item Catalog](catalog) | Exported item icons, stack details, recipes and tooltips | `:webcraft-catalog` | `webcraft_catalog` | `webcraft_catalog:items`<br>`webcraft_catalog:recipes`<br>`webcraft_catalog:tooltips` |
+| [Design Data](designs) | Exported banner patterns and armor trim data for design previews | `:webcraft-designs` | `webcraft_designs` | `webcraft_designs:banners`<br>`webcraft_designs:armor` |
+| [FTB Quests](#ftb-quests) | Internal feed for visible quests and a selected player's FTB team progress. Requires FTB Quests on the server. | `:webcraft-quests` | `webcraft_quests` | `webcraft_quests:quests` |
+| [Ponder](#ponder-scene-api) | Serves exported scenes from `previews.zip`. Create and Ponder are required on the client that captures scenes. | `:webcraft-ponder` | `webcraft_ponder` | `webcraft_ponder:ponder` |
 
 The [reference frontend](frontend/README.md) is an independent web client.
 
 ## Install on a dedicated server
 
-Build the Java 21 mods from the Universium root. The modules target Minecraft 1.21.1 and build and test against NeoForge 21.1.230, the minimum runtime version. The declared range also includes NeoForge 21.1.249.
+The mods target Minecraft 1.21.1, Java 21 and NeoForge 21.1.230 or later in the 21.1 line. If building from source, run the Gradle build from the Universium root. Use only the project tasks for the mods you need. The command below builds WebCraft and all five add-ons.
 
 ```sh
-gradle :webcraft-core:build :webcraft-equipment:build :webcraft-catalog:build :webcraft-designs:build
+gradle :webcraft-core:build :webcraft-equipment:build :webcraft-catalog:build :webcraft-designs:build :webcraft-quests:build :webcraft-ponder:build
 ```
 
-Build the separate FTB Quests add-on with `gradle :webcraft-quests:build`. It requires FTB Quests in the instance where the add-on is installed. Build the Ponder add-on with `gradle :webcraft-ponder:build`. See [FTB Quests setup](#ftb-quests) and [Ponder setup](#ponder-scene-api).
+1. Put `webcraft-<version>.jar` into the server's `mods/` directory. If building locally, find it in `core/build/libs/`. The same JAR provides the exporter when installed on a Minecraft client.
+2. Put each desired add-on JAR in the same server `mods/` directory. Local builds appear in the matching add-on's `build/libs/` directory, for example `equipment/build/libs/webcraft-equipment-<version>.jar`. Follow the [FTB Quests](#ftb-quests) or [Ponder](#ponder-scene-api) setup for those add-ons.
+3. Start the server once to generate `config/webcraft-server.toml`, then stop it and edit the file. A file at `<level-name>/serverconfig/webcraft-server.toml` takes precedence. Set `listenerEnabled = true` to start the API. Add the desired module IDs from the table to `enabledModules` to activate routes from the installed add-ons. Leave the list empty for built-in feeds alone and enable those feeds in their own settings.
+4. Complete any module-specific setup and restart the server. For inventory previews, install a [client-exported preview pack](#export-inventory-previews). For a basic vanilla fallback, put the official Minecraft 1.21.1 client JAR at `webcraft-assets/client.jar`, relative to the server working directory. Equipment item details are available without either archive.
 
-1. Put `webcraft-<version>.jar` from `core/build/libs/` into the server's `mods/` directory, plus the Equipment, Item Catalog or Design Data JARs for the modules you want to enable. The add-ons depend on WebCraft. The same WebCraft JAR runs in the client, where it also registers the exporter.
-2. Start the server once to generate `config/webcraft-server.toml`, then stop the server and edit the file. A file at `<level-name>/serverconfig/webcraft-server.toml` takes precedence. Use the UUID the server assigns to a player who has agreed to share their equipment with the token holder.
-3. Generate a random 32-byte secret, for example with `openssl rand -hex 32`. Pass it to the server process as `WEBCRAFT_VIEWER_TOKEN`. The accepted format is 43 to 128 URL-safe ASCII characters. Share the token privately with its intended viewer.
-4. Optionally install a [preview pack exported by a Minecraft client](#export-inventory-previews). For a basic vanilla fallback, put the official Minecraft 1.21.1 client JAR at `webcraft-assets/client.jar`, relative to the server working directory. Item details are available without either archive.
-5. Restart the server after changing settings or the token. Join with the selected player, [start the reference frontend](frontend/README.md), and enter the token.
+The following example enables only the Equipment add-on. Use the UUID the server assigns to a player who has agreed to share their equipment with the token holder. Generate a random 32-byte secret with a command such as `openssl rand -hex 32` and pass it to the server process as `WEBCRAFT_VIEWER_TOKEN`. The accepted format is 43 to 128 URL-safe ASCII characters. Share the token privately with its intended viewer. After restarting, join with the selected player, [start the reference frontend](frontend/README.md), and enter the token.
 
 ```toml
 listenerEnabled = true
 bindAddress = "127.0.0.1"
 port = 8765
-enabledModules = ["webcraft_equipment:equipment", "webcraft_catalog:items", "webcraft_catalog:recipes", "webcraft_catalog:tooltips", "webcraft_designs:banners", "webcraft_designs:armor"]
+enabledModules = ["webcraft_equipment:equipment"]
 viewerUuid = "00000000-0000-0000-0000-000000000000"
 ```
 
@@ -128,7 +127,7 @@ Each draw identifies its shader, textures, projection, model-view and texture ma
 
 ## Ponder scene API
 
-Install WebCraft (`webcraft-<version>.jar`) and `webcraft-ponder-<version>.jar` from `ponder/build/libs/` on the NeoForge server. Create and Ponder are client dependencies for [capturing the scenes](#export-ponder-scenes). Copy the client export to `webcraft-assets/previews.zip`, add `webcraft_ponder:ponder` to `enabledModules` in `webcraft-server.toml`, and restart. Replace the ZIP while stopped. The server reads the index on first access and keeps that archive open until the world closes.
+Install WebCraft (`webcraft-<version>.jar`) and `webcraft-ponder-<version>.jar` from `ponder/build/libs/` on the NeoForge server. The add-on's only server-side mod dependency is WebCraft. Create and Ponder are client dependencies for [capturing the scenes](#export-ponder-scenes). Copy the client export to `webcraft-assets/previews.zip`, add `webcraft_ponder:ponder` to `enabledModules` in `webcraft-server.toml`, and restart. Replace the ZIP while stopped. The server reads the index on first access and keeps that archive open until the world closes.
 
 The public discovery API lists these one-shot GET routes under `/api/v1/modules/webcraft_ponder/ponder/`.
 

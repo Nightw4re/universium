@@ -1,6 +1,6 @@
 # webcraft-marketplace
 
-Historical prototype for WebCraft Origin. The active build omits this module.
+Historical WebCraft add-on prototype. The active build omits this module.
 
 It does not start its own HTTP server.
 

@@ -12,16 +12,10 @@ logs/
 
 # WebCraft runtime and build artifacts
 modules/webcraft/frontend/node_modules/
-archive/webcraft-origin/frontend/storybook-static/
-archive/webcraft-origin/webroot/
-archive/webcraft-origin/run/
 archive/webcraft-marketplace/run/
 modules/*/.eclipse/
 modules/*/bin/
 archive/*/.eclipse/
 archive/*/bin/
-archive/webcraft-origin/config/webcraft-http.lock
-archive/webcraft-origin/config/webcraft.metadata
-archive/webcraft-origin/config/webcraft-cache/
 config/webcraft.metadata
 config/webcraft-cache/
