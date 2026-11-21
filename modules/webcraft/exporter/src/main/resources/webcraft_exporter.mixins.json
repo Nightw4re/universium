@@ -2,7 +2,7 @@
   "required": true,
   "package": "com.universium.webcraft.exporter.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": ["ItemRendererMixin"],
+  "client": ["AutomaticExportWindowMixin", "ItemColorsMixin", "ItemRendererMixin", "PonderDrawCaptureMixin", "TooltipInputConstantsMixin", "TooltipKeyMappingMixin"],
   "injectors": {
     "defaultRequire": 1
   }

@@ -19,106 +19,152 @@ import net.minecraft.world.item.armortrim.TrimPattern;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 final class ArmorDesignExport {
-    private ArmorDesignExport() {}
+    private final Minecraft minecraft;
+    private final boolean available;
+    private final List<Holder.Reference<TrimPattern>> patterns;
+    private final List<Holder.Reference<TrimMaterial>> materials;
+    private final Iterator<ResourceLocation> items;
+    private final Set<String> capturedProfiles = new HashSet<>();
+    private Holder<ArmorMaterial> trimArmor;
+    private String trimProfile;
+    private boolean trimLeggings;
+    private int patternIndex;
+    private int materialIndex;
+    private boolean finished;
+    private boolean manifestQueued;
+    private volatile Boolean geometryNeeded;
 
-    static JsonObject collect(Minecraft minecraft, HolderLookup.Provider registries, DesignExport assets) throws IOException {
-        var patterns = registries.lookup(Registries.TRIM_PATTERN);
-        var materials = registries.lookup(Registries.TRIM_MATERIAL);
-        if (patterns.isEmpty() || materials.isEmpty()) {
-            return null;
+    // The writer assembles these from captured rows and resolved texture hashes.
+    private final JsonObject profiles = new JsonObject();
+    private final JsonArray pieces = new JsonArray();
+
+    ArmorDesignExport(Minecraft minecraft, HolderLookup.Provider registries) {
+        this.minecraft = minecraft;
+        var patternLookup = registries.lookup(Registries.TRIM_PATTERN);
+        var materialLookup = registries.lookup(Registries.TRIM_MATERIAL);
+        available = patternLookup.isPresent() && materialLookup.isPresent();
+        patterns = patternLookup.map(ArmorDesignExport::sorted).orElseGet(List::of);
+        materials = materialLookup.map(ArmorDesignExport::sorted).orElseGet(List::of);
+        items = BuiltInRegistries.ITEM.keySet().stream().filter(id -> id.getNamespace().equals("minecraft"))
+                .filter(id -> BuiltInRegistries.ITEM.get(id) instanceof ArmorItem armor
+                        && armor.builtInRegistryHolder().is(ItemTags.TRIMMABLE_ARMOR))
+                .sorted().iterator();
+    }
+
+    DesignExport.Capture captureNext(DesignExport assets) {
+        if (!available || finished) return DesignExport.Capture.DONE;
+        if (manifestQueued) {
+            if (geometryNeeded == null) return DesignExport.Capture.WAITING;
+            finished = true;
+            if (!geometryNeeded) return DesignExport.Capture.DONE;
+            var geometry = ArmorGeometryExport.collect(minecraft);
+            assets.submit(writer -> assets.writeManifest(writer, "armor_geometry", geometry));
+        } else if (trimArmor != null && patternIndex < patterns.size() && !materials.isEmpty()) {
+            captureTrim(assets);
+        } else if (items.hasNext()) {
+            capturePiece(assets, items.next());
+        } else {
+            manifestQueued = true;
+            captureManifest(assets);
         }
-        var patternList = sorted(patterns.get());
-        var materialList = sorted(materials.get());
-        var profiles = new JsonObject();
-        var pieces = new JsonArray();
-        var items = BuiltInRegistries.ITEM.keySet().stream().filter(id -> id.getNamespace().equals("minecraft"))
-                .sorted().toList();
-        for (var id : items) {
-            if (!(BuiltInRegistries.ITEM.get(id) instanceof ArmorItem armor)
-                    || !armor.builtInRegistryHolder().is(ItemTags.TRIMMABLE_ARMOR)) {
-                continue;
+        return DesignExport.Capture.PROGRESSED;
+    }
+
+    private void capturePiece(DesignExport assets, ResourceLocation id) {
+        var armor = (ArmorItem) BuiltInRegistries.ITEM.get(id);
+        EquipmentSlot slot = armor.getEquipmentSlot();
+        boolean leggings = slot == EquipmentSlot.LEGS;
+        var material = armor.getMaterial();
+        var layers = material.value().layers();
+        if (layers.isEmpty()) return;
+        var textures = layers.stream().map(layer -> assets.resource(layer.texture(leggings))).toList();
+        var tints = layers.stream().map(ArmorMaterial.Layer::dyeable).toList();
+        String profile = material.unwrapKey().orElseThrow().location() + (leggings ? "/inner" : "/outer");
+        if (capturedProfiles.add(profile)) {
+            trimArmor = material;
+            trimProfile = profile;
+            trimLeggings = leggings;
+            patternIndex = 0;
+            materialIndex = 0;
+        }
+        var piece = new JsonObject();
+        piece.addProperty("id", id.toString());
+        piece.addProperty("name", armor.getDefaultInstance().getHoverName().getString());
+        piece.addProperty("slot", slot.getName());
+        piece.addProperty("profile", profile);
+        assets.submit(writer -> {
+            var rows = new JsonArray();
+            for (int index = 0; index < textures.size(); index++) {
+                String hash = textures.get(index).write(writer);
+                if (hash == null) return;
+                var row = new JsonObject();
+                row.addProperty("texture", hash);
+                if (tints.get(index)) row.addProperty("tint", 0xa06540);
+                rows.add(row);
             }
-            EquipmentSlot slot = armor.getEquipmentSlot();
-            boolean leggings = slot == EquipmentSlot.LEGS;
-            var armorMaterial = armor.getMaterial();
-            var layers = baseLayers(armorMaterial, leggings, assets);
-            if (layers == null || layers.isEmpty()) {
-                continue;
-            }
-            String profile = armorMaterial.unwrapKey().orElseThrow().location() + (leggings ? "/inner" : "/outer");
-            if (!profiles.has(profile)) {
-                profiles.add(profile, trimTextures(minecraft, assets, armorMaterial, leggings, patternList, materialList));
-            }
-            var piece = new JsonObject();
-            piece.addProperty("id", id.toString());
-            piece.addProperty("name", armor.getDefaultInstance().getHoverName().getString());
-            piece.addProperty("slot", slot.getName());
-            piece.addProperty("profile", profile);
-            piece.add("layers", layers);
+            if (!profiles.has(profile)) profiles.add(profile, new JsonArray());
+            piece.add("layers", rows);
             pieces.add(piece);
-        }
-        if (pieces.isEmpty()) {
-            return null;
-        }
+        });
+    }
 
-        var result = new JsonObject();
+    private void captureTrim(DesignExport assets) {
+        var pattern = patterns.get(patternIndex);
+        var material = materials.get(materialIndex++);
+        if (materialIndex == materials.size()) {
+            materialIndex = 0;
+            patternIndex++;
+        }
+        var trim = new ArmorTrim(material, pattern);
+        var sprite = minecraft.getTextureAtlas(Sheets.ARMOR_TRIMS_SHEET)
+                .apply(trimLeggings ? trim.innerTexture(trimArmor) : trim.outerTexture(trimArmor));
+        var texture = assets.sprite(sprite);
+        String profile = trimProfile;
+        var row = new JsonObject();
+        row.addProperty("pattern", pattern.key().location().toString());
+        row.addProperty("material", material.key().location().toString());
+        boolean decal = pattern.value().decal();
+        assets.submit(writer -> {
+            var rows = profiles.getAsJsonArray(profile);
+            if (rows == null) return;
+            String hash = texture.write(writer);
+            if (hash == null) return;
+            row.addProperty("texture", hash);
+            row.addProperty("decal", decal);
+            rows.add(row);
+        });
+    }
+
+    private void captureManifest(DesignExport assets) {
         var materialNames = new JsonArray();
-        for (var material : materialList) {
+        for (var material : materials) {
             materialNames.add(option(material.key().location(), material.value().description().getString()));
         }
         var patternNames = new JsonArray();
-        for (var pattern : patternList) {
+        for (var pattern : patterns) {
             patternNames.add(option(pattern.key().location(), pattern.value().description().getString()));
         }
-        result.add("pieces", pieces);
-        result.add("materials", materialNames);
-        result.add("patterns", patternNames);
-        result.add("profiles", profiles);
-        result.add("projection", projection());
-        return result;
-    }
-
-    private static JsonArray baseLayers(Holder<ArmorMaterial> material, boolean leggings, DesignExport assets) throws IOException {
-        var layers = new JsonArray();
-        for (var layer : material.value().layers()) {
-            String hash = assets.resource(layer.texture(leggings));
-            if (hash == null) {
-                return null;
+        assets.submit(writer -> {
+            if (pieces.isEmpty()) {
+                assets.writeManifest(writer, "armor", null);
+                geometryNeeded = false;
+                return;
             }
-            var row = new JsonObject();
-            row.addProperty("texture", hash);
-            if (layer.dyeable()) {
-                row.addProperty("tint", 0xa06540);
-            }
-            layers.add(row);
-        }
-        return layers;
-    }
-
-    private static JsonArray trimTextures(Minecraft minecraft, DesignExport assets, Holder<ArmorMaterial> armor, boolean leggings,
-                                          List<Holder.Reference<TrimPattern>> patterns, List<Holder.Reference<TrimMaterial>> materials)
-            throws IOException {
-        var sprites = new JsonArray();
-        var atlas = minecraft.getTextureAtlas(Sheets.ARMOR_TRIMS_SHEET);
-        for (var pattern : patterns) {
-            for (var material : materials) {
-                var trim = new ArmorTrim(material, pattern);
-                var sprite = atlas.apply(leggings ? trim.innerTexture(armor) : trim.outerTexture(armor));
-                String hash = assets.sprite(sprite);
-                if (hash != null) {
-                    var row = new JsonObject();
-                    row.addProperty("pattern", pattern.key().location().toString());
-                    row.addProperty("material", material.key().location().toString());
-                    row.addProperty("texture", hash);
-                    row.addProperty("decal", pattern.value().decal());
-                    sprites.add(row);
-                }
-            }
-        }
-        return sprites;
+            var result = new JsonObject();
+            result.add("pieces", pieces);
+            result.add("materials", materialNames);
+            result.add("patterns", patternNames);
+            result.add("profiles", profiles);
+            result.add("projection", projection());
+            assets.writeManifest(writer, "armor", result);
+            geometryNeeded = true;
+        });
     }
 
     private static JsonObject projection() {

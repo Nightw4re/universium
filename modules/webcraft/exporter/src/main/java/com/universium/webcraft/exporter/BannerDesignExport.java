@@ -14,33 +14,81 @@ import net.minecraft.world.item.BannerPatternItem;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.entity.BannerPattern;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 
 final class BannerDesignExport {
-    private BannerDesignExport() {}
+    private final InventoryIconRenderer renderer;
+    private final boolean available;
+    private final Iterator<Holder.Reference<BannerPattern>> patterns;
+    private final List<BannerPatternItem> templates;
+    private final String white;
+    private final List<Pattern> loomPatterns = new ArrayList<>();
+    private BannerSlotExport banner;
+    private BannerSlotExport shield;
+    private boolean started;
+    private boolean finished;
+    private boolean patternCompletionQueued;
+    private volatile Boolean baseAvailable;
+    private volatile boolean patternsReady;
 
-    static JsonObject collect(HolderLookup.Provider registries, DesignExport assets, InventoryIconRenderer renderer) throws IOException {
-        var patterns = registries.lookup(Registries.BANNER_PATTERN);
-        if (patterns.isEmpty()) {
-            return null;
-        }
-        String base = assets.sprite(ModelBakery.BANNER_BASE.sprite());
-        String cloth = assets.sprite(Sheets.BANNER_BASE.sprite());
-        if (base == null || cloth == null) {
-            return null;
-        }
+    // These are assembled in archive order on the writer thread.
+    private JsonObject result;
+    private final JsonArray entries = new JsonArray();
 
-        var result = new JsonObject();
-        result.addProperty("base", base);
-        result.addProperty("cloth", cloth);
-        result.addProperty("maxLayers", 6);
-        var face = new JsonArray();
-        for (int coordinate : new int[]{1, 1, 20, 40}) {
-            face.add(coordinate);
+    BannerDesignExport(HolderLookup.Provider registries, InventoryIconRenderer renderer) {
+        this.renderer = renderer;
+        var lookup = registries.lookup(Registries.BANNER_PATTERN);
+        available = lookup.isPresent();
+        patterns = lookup.stream()
+                .flatMap(HolderLookup.RegistryLookup::listElements)
+                .sorted(Comparator.comparing(entry -> entry.key().location().toString())).iterator();
+        templates = BuiltInRegistries.ITEM.stream().filter(BannerPatternItem.class::isInstance)
+                .map(BannerPatternItem.class::cast).toList();
+        white = Component.translatable("color.minecraft.white").getString() + " ";
+    }
+
+    DesignExport.Capture captureNext(DesignExport assets) {
+        if (!available || finished) return DesignExport.Capture.DONE;
+        if (!started) {
+            started = true;
+            captureBase(assets);
+            return DesignExport.Capture.PROGRESSED;
         }
-        result.add("face", face);
+        if (baseAvailable == null) return DesignExport.Capture.WAITING;
+        if (!baseAvailable) return DesignExport.Capture.DONE;
+        if (patterns.hasNext()) {
+            capturePattern(assets, patterns.next());
+            return DesignExport.Capture.PROGRESSED;
+        }
+        if (banner == null) {
+            if (!patternCompletionQueued) {
+                patternCompletionQueued = true;
+                assets.submit(writer -> patternsReady = true);
+                return DesignExport.Capture.PROGRESSED;
+            }
+            if (!patternsReady) return DesignExport.Capture.WAITING;
+            banner = new BannerSlotExport(false, loomPatterns, renderer);
+            shield = new BannerSlotExport(true, loomPatterns, renderer);
+        }
+        if (banner.captureNext(assets) || shield.captureNext(assets)) return DesignExport.Capture.PROGRESSED;
+        finished = true;
+        assets.submit(writer -> {
+            var slots = new JsonObject();
+            slots.add("banner", banner.result());
+            slots.add("shield", shield.result());
+            result.add("patterns", entries);
+            result.add("slotPreviews", slots);
+            assets.writeManifest(writer, "banners", result);
+        });
+        return DesignExport.Capture.PROGRESSED;
+    }
+
+    private void captureBase(DesignExport assets) {
+        var base = assets.sprite(ModelBakery.BANNER_BASE.sprite());
+        var cloth = assets.sprite(Sheets.BANNER_BASE.sprite());
         var colors = new JsonArray();
         for (var color : DyeColor.values()) {
             var row = new JsonObject();
@@ -49,45 +97,54 @@ final class BannerDesignExport {
             row.addProperty("rgb", color.getTextureDiffuseColor() & 0xffffff);
             colors.add(row);
         }
-        result.add("colors", colors);
+        assets.submit(writer -> {
+            String baseHash = base.write(writer);
+            String clothHash = cloth.write(writer);
+            if (baseHash == null || clothHash == null) {
+                assets.writeManifest(writer, "banners", null);
+                baseAvailable = false;
+                return;
+            }
+            result = new JsonObject();
+            result.addProperty("base", baseHash);
+            result.addProperty("cloth", clothHash);
+            result.addProperty("maxLayers", 6);
+            var face = new JsonArray();
+            for (int coordinate : new int[]{1, 1, 20, 40}) face.add(coordinate);
+            result.add("face", face);
+            result.add("colors", colors);
+            baseAvailable = true;
+        });
+    }
 
-        var templates = BuiltInRegistries.ITEM.stream().filter(BannerPatternItem.class::isInstance)
-                .map(BannerPatternItem.class::cast).toList();
-        var entries = new JsonArray();
-        var loomPatterns = new ArrayList<Holder.Reference<BannerPattern>>();
-        String white = Component.translatable("color.minecraft.white").getString() + " ";
-        var registered = patterns.get().listElements().sorted(Comparator.comparing(entry -> entry.key().location().toString())).toList();
-        for (var pattern : registered) {
-            var possibleTemplates = new JsonArray();
-            if (!pattern.is(BannerPatternTags.NO_ITEM_REQUIRED)) {
-                for (var template : templates) {
-                    if (pattern.is(template.getBannerPattern())) {
-                        var row = new JsonObject();
-                        row.addProperty("id", BuiltInRegistries.ITEM.getKey(template).toString());
-                        row.addProperty("name", template.getDefaultInstance().getHoverName().getString());
-                        possibleTemplates.add(row);
-                    }
-                }
-                if (possibleTemplates.isEmpty()) {
-                    continue;
+    private void capturePattern(DesignExport assets, Holder.Reference<BannerPattern> pattern) {
+        var possibleTemplates = new JsonArray();
+        if (!pattern.is(BannerPatternTags.NO_ITEM_REQUIRED)) {
+            for (var template : templates) {
+                if (pattern.is(template.getBannerPattern())) {
+                    var row = new JsonObject();
+                    row.addProperty("id", BuiltInRegistries.ITEM.getKey(template).toString());
+                    row.addProperty("name", template.getDefaultInstance().getHoverName().getString());
+                    possibleTemplates.add(row);
                 }
             }
-            String hash = assets.sprite(Sheets.getBannerMaterial(pattern).sprite());
-            if (hash == null) {
-                continue;
-            }
-            String id = pattern.key().location().toString();
-            var row = new JsonObject();
-            row.addProperty("id", id);
-            String name = Component.translatable(pattern.value().translationKey() + ".white").getString();
-            row.addProperty("name", name.startsWith(white) ? name.substring(white.length()) : name);
+            if (possibleTemplates.isEmpty()) return;
+        }
+        var texture = assets.sprite(Sheets.getBannerMaterial(pattern).sprite());
+        String id = pattern.key().location().toString();
+        var row = new JsonObject();
+        row.addProperty("id", id);
+        String name = Component.translatable(pattern.value().translationKey() + ".white").getString();
+        row.addProperty("name", name.startsWith(white) ? name.substring(white.length()) : name);
+        assets.submit(writer -> {
+            String hash = texture.write(writer);
+            if (hash == null) return;
             row.addProperty("texture", hash);
             row.add("templates", possibleTemplates);
             entries.add(row);
-            loomPatterns.add(pattern);
-        }
-        result.add("patterns", entries);
-        result.add("slotPreviews", BannerSlotExport.collect(loomPatterns, assets, renderer));
-        return result;
+            loomPatterns.add(new Pattern(pattern, id));
+        });
     }
+
+    record Pattern(Holder.Reference<BannerPattern> holder, String id) {}
 }

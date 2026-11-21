@@ -26,13 +26,13 @@ subprojects {
 
 tasks.register("runClient") {
     group = "application"
-    description = "Runs the NeoForge client with the WebCraft preview exporter."
-    dependsOn(":webcraft-exporter:runClient")
+    description = "Runs the NeoForge client with WebCraft."
+    dependsOn(":webcraft-core:runClient")
 }
 
 tasks.register("runServer") {
     group = "application"
-    description = "Runs the NeoForge server with WebCraft Core."
+    description = "Runs the NeoForge server with WebCraft."
     dependsOn(":webcraft-core:runServer")
 }
 

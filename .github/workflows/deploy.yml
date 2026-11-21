@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           changed_modules=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'modules/webcraft/*/gradle.properties' \
-            | awk -F/ 'NF == 4 && $3 ~ /^(core|equipment|exporter|catalog|designs)$/ { print "webcraft-" $3 }' \
+            | awk -F/ 'NF == 4 && $3 ~ /^(core|equipment|catalog|designs|quests|ponder)$/ { print "webcraft-" $3 }' \
             | sort -u \
             | jq -R -s -c 'split("\n") | map(select(length > 0))')
           if [ "$changed_modules" = "[]" ]; then
@@ -54,11 +54,30 @@ jobs:
       - name: Build module
         run: gradle :${{ matrix.module }}:build
 
+      - name: Locate module JAR
+        id: jar
+        shell: bash
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          module_dir="modules/webcraft/${MODULE#webcraft-}"
+          version=$(awk -F= '$1 == "modVersion" { sub(/\r$/, "", $2); print $2; exit }' "$module_dir/gradle.properties")
+          archive_name="$MODULE"
+          if [[ "$MODULE" == "webcraft-core" ]]; then
+            archive_name=webcraft
+          fi
+          jar="$module_dir/build/libs/$archive_name-$version.jar"
+          if [[ -z "$version" || ! -f "$jar" ]]; then
+            printf 'Expected module JAR at %s\n' "$jar" >&2
+            exit 1
+          fi
+          printf 'path=%s\n' "$jar" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.module }}-build
-          path: modules/webcraft/*/build/libs/${{ matrix.module }}-*.jar
+          path: ${{ steps.jar.outputs.path }}
           if-no-files-found: error
 
   deploy-curseforge:

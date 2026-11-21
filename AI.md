@@ -69,7 +69,11 @@ Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
 - Keep both parts in English.
 - Keep the description concise and specific.
 - Do not add `Co-Authored-By` trailers to commits.
-- Do not push to any remote repository.
+
+## Git remotes
+
+- Routine pushes to a verified Universium remote are allowed after reviewing the branch and commits being pushed. Use normal fast-forward pushes and preserve remote history.
+- Get explicit authorization before publishing a release, deploying, or manually dispatching hosted CI.
 
 ## When extending the project
 

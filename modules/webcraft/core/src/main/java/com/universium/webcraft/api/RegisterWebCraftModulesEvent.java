@@ -27,8 +27,9 @@ public final class RegisterWebCraftModulesEvent extends Event implements IModBus
 
     /**
      * Registers a unique module ID and its exact GET routes. Route names are lowercase segments
-     * such as "equipment". Routes are private unless explicitly registered as a
-     * {@link WebCraftReadRoute.PublicRoute}.
+     * such as "equipment". Routes require the viewer token by default. A
+     * {@link WebCraftReadRoute.PublicRoute} is public, while a
+     * {@link WebCraftReadRoute.InternalRoute} uses the undiscoverable internal module path.
      */
     public void register(ResourceLocation moduleId, Map<String, WebCraftReadRoute> routes) {
         registrar.accept(Objects.requireNonNull(moduleId, "moduleId"), Map.copyOf(routes));

@@ -1,6 +1,5 @@
 package com.universium.webcraft.exporter;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.world.item.DyeColor;
 
 final class BannerSlotLayers {
@@ -8,16 +7,12 @@ final class BannerSlotLayers {
 
     private BannerSlotLayers() {}
 
-    static NativeImage separate(NativeImage dark, NativeImage light, NativeImage overDark, NativeImage overLight) {
-        var result = new NativeImage(dark.getWidth(), dark.getHeight(), false);
-        for (int y = 0; y < result.getHeight(); y++) {
-            for (int x = 0; x < result.getWidth(); x++) {
-                int pixel = separate(dark.getPixelRGBA(x, y), light.getPixelRGBA(x, y),
-                        overDark.getPixelRGBA(x, y), overLight.getPixelRGBA(x, y));
-                result.setPixelRGBA(x, y, pixel);
-            }
+    static PngPixels separate(PngPixels dark, PngPixels light, PngPixels overDark, PngPixels overLight) {
+        var pixels = new int[dark.rgba().length];
+        for (int index = 0; index < pixels.length; index++) {
+            pixels[index] = separate(dark.rgba()[index], light.rgba()[index], overDark.rgba()[index], overLight.rgba()[index]);
         }
-        return result;
+        return new PngPixels(dark.width(), dark.height(), pixels);
     }
 
     static int separate(int dark, int light, int overDark, int overLight) {

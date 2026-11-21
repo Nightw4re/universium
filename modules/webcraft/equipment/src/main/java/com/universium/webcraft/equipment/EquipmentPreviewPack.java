@@ -28,16 +28,18 @@ final class EquipmentPreviewPack {
     }
 
     JsonObject find(String key) {
-        byte[] png = pack.readIcon(key);
-        if (png == null) {
+        var icon = pack.readIconWithFormat(key);
+        if (icon == null) {
             return null;
         }
         JsonObject preview = new JsonObject();
         preview.addProperty("type", "sprite");
-        preview.addProperty("png", Base64.getEncoder().encodeToString(png));
-        byte[] animation = pack.readAnimation(key);
+        String field = icon.contentType().equals("image/webp") ? "webp" : "png";
+        preview.addProperty(field, Base64.getEncoder().encodeToString(icon.bytes()));
+        var animation = pack.readAnimationWithFormat(key);
         if (animation != null) {
-            preview.addProperty("animation", Base64.getEncoder().encodeToString(animation));
+            String animationField = animation.contentType().equals("image/webp") ? "animationWebp" : "animation";
+            preview.addProperty(animationField, Base64.getEncoder().encodeToString(animation.bytes()));
         }
         return preview;
     }

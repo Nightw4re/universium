@@ -1,4 +1,4 @@
-import { createServer, request } from "node:http";
+import { createServer, request, STATUS_CODES } from "node:http";
 import { readFile } from "node:fs/promises";
 
 const enabled = process.env.WEBCRAFT_FRONTEND_ENABLED ?? "false";
@@ -18,7 +18,9 @@ const files = new Map([
   ["/index.html", ["index.html", "text/html"]],
   ["/style.css", ["style.css", "text/css"]],
   ["/app.mjs", ["app.mjs", "text/javascript"]],
+  ["/api.mjs", ["api.mjs", "text/javascript"]],
   ["/catalog.mjs", ["catalog.mjs", "text/javascript"]],
+  ["/item-feeds.mjs", ["item-feeds.mjs", "text/javascript"]],
   ["/glint.mjs", ["glint.mjs", "text/javascript"]],
   ["/preview.mjs", ["preview.mjs", "text/javascript"]],
   ["/motion-picture.mjs", ["motion-picture.mjs", "text/javascript"]],
@@ -31,10 +33,10 @@ const files = new Map([
   ["/armor-skin.mjs", ["armor-skin.mjs", "text/javascript"]],
 ]);
 
-createServer(async (incoming, outgoing) => {
+const server = createServer(async (incoming, outgoing) => {
   const path = incoming.url;
   const method = incoming.method;
-  if (path.startsWith("/api/v1/") && method === "GET") {
+  if (path.startsWith("/api/v1/") && !/^\/api\/v1\/internal(?:[/?]|$)/.test(path) && method === "GET") {
     const authorization = incoming.headers.authorization;
     const upstream = request({
       hostname: "127.0.0.1", port: apiPort, path, method,
@@ -71,4 +73,60 @@ createServer(async (incoming, outgoing) => {
   } catch {
     outgoing.writeHead(500).end();
   }
-}).listen(webPort, "127.0.0.1", () => console.log("WebCraft at http://127.0.0.1:" + webPort));
+});
+
+function endUpgrade(socket, status) {
+  socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+}
+
+server.on("upgrade", (incoming, downstream, head) => {
+  downstream.on("error", () => downstream.destroy());
+  if (incoming.method !== "GET" || incoming.url !== "/api/v1/ws") {
+    endUpgrade(downstream, 404);
+    return;
+  }
+  if (incoming.headersDistinct.host?.length !== 1) {
+    endUpgrade(downstream, 400);
+    return;
+  }
+  const headers = {};
+  for (const name of ["host", "origin", "upgrade", "connection", "authorization",
+    "sec-websocket-key", "sec-websocket-version"]) {
+    const values = incoming.headersDistinct[name];
+    if (values) headers[name] = values.length === 1 ? values[0] : values;
+  }
+  downstream.pause();
+  let tunnel;
+  const upstream = request({
+    hostname: "127.0.0.1", port: apiPort, path: incoming.url, method: incoming.method, headers, agent: false,
+  });
+  upstream.setTimeout(5000, () => upstream.destroy());
+  upstream.on("upgrade", (response, socket, upstreamHead) => {
+    tunnel = socket;
+    socket.setTimeout(0);
+    socket.on("error", () => downstream.destroy());
+    socket.on("close", () => downstream.destroy());
+    downstream.write("HTTP/1.1 101 Switching Protocols\r\n");
+    for (let index = 0; index < response.rawHeaders.length; index += 2) {
+      downstream.write(response.rawHeaders[index] + ": " + response.rawHeaders[index + 1] + "\r\n");
+    }
+    downstream.write("\r\n");
+    if (upstreamHead.length) downstream.write(upstreamHead);
+    if (head.length) socket.write(head);
+    downstream.pipe(socket).pipe(downstream);
+  });
+  upstream.on("response", response => {
+    endUpgrade(downstream, response.statusCode);
+    response.resume();
+  });
+  upstream.on("error", () => {
+    if (!downstream.destroyed) endUpgrade(downstream, 502);
+  });
+  downstream.on("close", () => {
+    if (tunnel) tunnel.destroy();
+    else upstream.destroy();
+  });
+  upstream.end();
+});
+
+server.listen(webPort, "127.0.0.1", () => console.log("WebCraft at http://127.0.0.1:" + server.address().port));

@@ -1,0 +1,68 @@
+def jeiVersion = property("jeiVersion")
+def emiVersion = property("emiVersion")
+def chicoryVersion = "1.7.5"
+
+def exporter = file("../exporter")
+def encoderWasm = new File(exporter, "codec/encoder.wasm")
+def encoderSources = layout.buildDirectory.dir("generated/sources/webp")
+def encoderResources = layout.buildDirectory.dir("generated/resources/webp")
+sourceSets {
+    webpCompiler {
+        java.srcDir(new File(exporter, "codec/compiler"))
+    }
+    main {
+        java.srcDir(new File(exporter, "src/main/java"))
+        resources.srcDir(new File(exporter, "src/main/resources"))
+        java.srcDir(encoderSources)
+        resources.srcDir(encoderResources)
+    }
+    test {
+        java.srcDir(new File(exporter, "src/test/java"))
+        resources.srcDir(new File(exporter, "src/test/resources"))
+    }
+}
+def compileWebp = tasks.register("compileWebp", JavaExec) {
+    classpath = sourceSets.webpCompiler.runtimeClasspath
+    mainClass = "CompileWebp"
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    inputs.file(encoderWasm)
+    outputs.dirs(encoderSources, encoderResources)
+    args encoderWasm, encoderSources.get().asFile, encoderResources.get().asFile
+}
+
+repositories {
+    maven {
+        url = uri("https://maven.blamejared.com")
+        content { includeGroup("mezz.jei") }
+    }
+    maven {
+        url = uri("https://repo.sleeping.town")
+        content { includeGroup("dev.emi") }
+    }
+    maven {
+        url = uri("https://maven.createmod.net")
+        content { includeGroup("net.createmod.ponder") }
+    }
+}
+
+dependencies {
+    webpCompilerImplementation "com.dylibso.chicory:build-time-compiler:${chicoryVersion}"
+    compileOnly files(encoderResources).builtBy(compileWebp)
+    compileOnly "mezz.jei:jei-1.21.1-neoforge-api:${jeiVersion}"
+    compileOnly "dev.emi:emi-neoforge:${emiVersion}:api"
+    compileOnly("net.createmod.ponder:ponder-neoforge:${property('ponderVersion')}") { transitive = false }
+    for (def artifact : ["runtime", "wasm"]) {
+        def library = "com.dylibso.chicory:${artifact}:${chicoryVersion}"
+        jarJar(implementation(library))
+        additionalRuntimeClasspath(library)
+    }
+    testImplementation "org.glavo:webp:0.2.0"
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    dependsOn(compileWebp)
+    from(new File(exporter, "codec")) {
+        include "COPYING", "PATENTS", "WASI-LICENSE"
+        into "META-INF/licenses/libwebp"
+    }
+}

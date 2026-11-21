@@ -3,7 +3,12 @@ plugins {
 }
 
 version = property("modVersion")
-def neoForgeVersion = project(":webcraft-core").property("neoVersion")
+def coreProject = project(":webcraft-core")
+def neoForgeVersion = coreProject.property("neoVersion")
+
+dependencies {
+    implementation coreProject
+}
 
 testing {
     suites {
@@ -17,14 +22,11 @@ neoForge {
     version = neoForgeVersion
     addModdingDependenciesTo sourceSets.test
     mods {
-        webcraft_exporter {
-            sourceSet sourceSets.main
+        webcraft_core {
+            sourceSet coreProject.sourceSets.main
         }
-    }
-    runs {
-        client {
-            client()
-            gameDirectory = rootProject.file(".local-artifacts/webcraft-exporter/client")
+        webcraft_ponder {
+            sourceSet sourceSets.main
         }
     }
 }

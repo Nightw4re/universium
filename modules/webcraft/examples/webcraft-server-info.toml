@@ -1,0 +1,39 @@
+# NeoForge generates this file in config/ at first startup.
+# For per-world settings, place a copy in <level-name>/serverconfig/.
+# The main webcraft-server.toml must also enable the listener for the current server type.
+
+# Enable the feed, then opt in to the individual fields below.
+enabled = false
+# PUBLIC uses /api/v1/server-info. INTERNAL uses /api/v1/internal/server-info and requires WEBCRAFT_FEED_TOKEN.
+exposure = "PUBLIC"
+loopbackOnly = false
+# INHERIT uses apiTransport in webcraft-server.toml.
+transport = "INHERIT"
+
+# Set a public value to include it, or leave it blank to omit the field.
+name = ""
+joinAddress = ""
+
+# Publishes both the online count and the Minecraft player limit.
+publishPlayersOnline = false
+publishMotd = false
+# An optional server-icon.webp alongside server.properties serves requests using ?iconFormat=webp.
+publishServerIcon = false
+publishUptime = false
+# Cumulative uptime excludes offline time and is checkpointed about every 10 seconds and on a clean stop.
+publishTotalUptime = false
+# Publishes world age in whole minutes and completed 24-hour periods, including offline time.
+publishWorldAge = false
+# To supply or correct the start of an existing world, set a verified UTC timestamp such as "2025-04-07T09:00:00Z".
+# Set it only in this world's serverconfig/webcraft-server-info.toml. Leave blank if the date is unknown.
+worldStartTimestamp = ""
+publishWorldTime = false
+
+[modpack]
+publishName = false
+publishVersion = false
+source = "AUTO"
+# The following settings apply only when source = "CUSTOM".
+file = ""
+nameKey = "name"
+versionKey = "version"

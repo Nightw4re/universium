@@ -83,6 +83,6 @@ export async function showGlint(frame, image, recipe) {
     if (motion) requestAnimationFrame(draw);
   }
 
-  frame.replaceChildren(canvas);
+  image.replaceWith(canvas);
   draw(start);
 }

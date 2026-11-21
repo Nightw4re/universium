@@ -1,0 +1,25 @@
+# Place in <level-name>/serverconfig/ or use as a template in defaultconfigs/.
+listenerEnabled = true
+singleplayerEnabled = false
+bindAddress = "127.0.0.1"
+port = 8765
+
+# New and existing configurations default to HTTP. Use WEBSOCKET or BOTH to enable upgrades.
+apiTransport = "BOTH"
+# Exact path overrides take precedence over per-feed and global settings.
+routeTransports = []
+# Example: websocketOrigins = ["https://webcraft.example.org"]
+websocketOrigins = []
+
+enabledModules = []
+apiDocsEnabled = false
+
+# Per-feed selections accept INHERIT, HTTP, WEBSOCKET or BOTH.
+playerHistoryTransport = "INHERIT"
+onlinePlayersTransport = "INHERIT"
+playerRosterTransport = "INHERIT"
+
+# Set advancementsEnabled and playerRosterEnabled to true for a trusted Achievements consumer.
+advancementsEnabled = false
+advancementsLoopbackOnly = true
+advancementsTransport = "INHERIT"

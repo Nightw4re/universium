@@ -7,16 +7,18 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.client.ClientHooks;
 import org.joml.Matrix4f;
-
-import java.io.IOException;
 
 final class InventoryIconRenderer implements AutoCloseable {
     private static final int SIZE = 64;
     private static final float GUI_SCALE = 3.0F;
     private static final int HALF_SLOT = 8;
+    private static final ResourceLocation SPATIAL_RIFT = ResourceLocation.fromNamespaceAndPath("neovitae", "spatial_rift");
     private final Minecraft minecraft;
     private final TextureTarget target;
 
@@ -27,17 +29,28 @@ final class InventoryIconRenderer implements AutoCloseable {
         minecraft.getMainRenderTarget().bindWrite(true);
     }
 
-    byte[] render(ItemStack stack) throws IOException {
+    PngPixels render(ItemStack stack) {
         return render(stack, false);
     }
 
-    byte[] render(ItemStack stack, boolean allowTransparent) throws IOException {
+    PngPixels render(ItemStack stack, boolean allowTransparent) {
         RenderSystem.assertOnRenderThread();
+        var capture = renderStack(DomumPreviewStacks.withDefaultMaterials(stack));
+        if (allowTransparent || capture.visible()) return capture;
+        if (!SPATIAL_RIFT.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()))) return null;
+
+        // The Rift uses the air model. Show Minecraft's marker for an invisible block in the catalog.
+        var marker = renderStack(Items.STRUCTURE_VOID.getDefaultInstance());
+        return marker.visible() ? marker : null;
+    }
+
+    private PngPixels renderStack(ItemStack previewStack) {
         var projection = new Matrix4f(RenderSystem.getProjectionMatrix());
         var sorting = RenderSystem.getVertexSorting();
         var modelView = RenderSystem.getModelViewStack();
         var shaderColor = RenderSystem.getShaderColor().clone();
         modelView.pushMatrix();
+        var previousTintStack = PreviewItemColors.begin(previewStack);
         try (var image = new NativeImage(SIZE, SIZE, false)) {
             target.clear(Minecraft.ON_OSX);
             target.bindWrite(true);
@@ -53,7 +66,7 @@ final class InventoryIconRenderer implements AutoCloseable {
 
             var graphics = new GuiGraphics(minecraft, minecraft.renderBuffers().bufferSource());
             try {
-                graphics.renderItem(stack, -HALF_SLOT, -HALF_SLOT);
+                graphics.renderItem(previewStack, -HALF_SLOT, -HALF_SLOT);
             } finally {
                 graphics.flush();
             }
@@ -65,8 +78,9 @@ final class InventoryIconRenderer implements AutoCloseable {
                 target.unbindRead();
             }
             image.flipY();
-            return allowTransparent || hasVisiblePixels(image) ? image.asByteArray() : null;
+            return new PngPixels(SIZE, SIZE, image.getPixelsRGBA());
         } finally {
+            PreviewItemColors.restore(previousTintStack);
             RenderSystem.setProjectionMatrix(projection, sorting);
             modelView.popMatrix();
             RenderSystem.applyModelViewMatrix();
@@ -74,17 +88,6 @@ final class InventoryIconRenderer implements AutoCloseable {
             Lighting.setupFor3DItems();
             minecraft.getMainRenderTarget().bindWrite(true);
         }
-    }
-
-    private static boolean hasVisiblePixels(NativeImage image) {
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                if ((image.getPixelRGBA(x, y) >>> 24) != 0) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     @Override

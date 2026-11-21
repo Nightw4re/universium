@@ -7,7 +7,7 @@ Universium is a Minecraft mod monorepo targeting Java 21, Minecraft 1.21.1 and N
 - Check the current branch, working tree and index before editing. Preserve existing staged and unstaged work. Inspect the branch again before committing.
 - Use the primary checkout for routine work and keep related changes together. When authorized parallel work needs isolation, coordinate ownership of shared files, integrate the changes into the intended checkout and verify the combined result before handing it back.
 - Review the working diff. If committing, stage explicit task-owned files or hunks and review the staged diff. Leave overlapping changes unstaged when ownership cannot be determined reliably and report the overlap.
-- Preserve existing history, branches and release tags. Avoid destructive Git operations and automatic stashing in a shared checkout. Keep repository work local under the Git policy in [AI.md](AI.md). Publishing a release, deploying or manually dispatching hosted CI requires authorization for that action.
+- Preserve existing history, branches and release tags. Avoid destructive Git operations and automatic stashing in a shared checkout. Follow the [Git remotes policy](AI.md#git-remotes) for routine pushes, releases, deployments and hosted CI.
 
 ## Verification
 

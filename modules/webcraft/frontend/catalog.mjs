@@ -1,5 +1,6 @@
 import { showGlint } from "./glint.mjs";
-import { motionPicture } from "./motion-picture.mjs";
+import { apiImage } from "./api.mjs";
+import { createItemFeeds } from "./item-feeds.mjs";
 
 const moduleId = "webcraft_catalog:items";
 const routes = "/api/v1/modules/webcraft_catalog/items";
@@ -26,9 +27,12 @@ const detailPicture = document.querySelector("#detail-picture");
 const detailName = document.querySelector("#detail-name");
 const detailId = document.querySelector("#detail-id");
 const controls = document.querySelector("#variant-controls");
+const feedSections = Object.fromEntries(["tooltip", "recipes", "stack"]
+  .map(feed => [feed, document.querySelector("#detail-" + feed)]));
 const number = new Intl.NumberFormat();
 let loading = false;
 let items;
+let itemsById = new Map();
 let matched = [];
 let visible = 0;
 let effects;
@@ -71,13 +75,30 @@ function showImage(frame, item, catalogId, lazy = false, animate = true) {
   image.decoding = "async";
   const parameters = new URLSearchParams({ id: catalogId });
   if (item.variantId) parameters.set("variant", item.variantId);
-  image.src = routes + "/icon?" + parameters;
-  const preview = animate ? motionPicture(image, image.src + "&animated=1") : image;
+  const path = routes + "/icon?" + parameters;
+  const preview = apiImage(image, path, animate ? path + "&animated=1" : undefined);
   image.addEventListener("error", () => {
     if (preview.parentNode === frame) frame.textContent = "No preview";
   }, { once: true });
   frame.replaceChildren(preview);
+  showItemBar(frame, item.bar);
   return image;
+}
+
+function showItemBar(frame, bar) {
+  if (!Number.isInteger(bar?.width) || bar.width < 0 || bar.width > 13
+      || !Number.isInteger(bar.color) || bar.color < 0 || bar.color > 0xffffff) return;
+
+  const meter = document.createElement("span");
+  meter.className = "item-picture-bar";
+  meter.setAttribute("role", "meter");
+  meter.setAttribute("aria-label", "Item progress");
+  meter.setAttribute("aria-valuemin", "0");
+  meter.setAttribute("aria-valuemax", "13");
+  meter.setAttribute("aria-valuenow", bar.width);
+  meter.style.setProperty("--item-bar-fill", `${bar.width / 13 * 100}%`);
+  meter.style.setProperty("--item-bar-color", "#" + bar.color.toString(16).padStart(6, "0"));
+  frame.append(meter);
 }
 
 function showBatch() {
@@ -85,7 +106,7 @@ function showBatch() {
   grid.append(...matched.slice(visible, next).map(itemCard));
   visible = next;
   more.hidden = visible >= matched.length;
-  status.textContent = matched.length
+  status.textContent = !items.length ? "The server's item catalog is empty." : matched.length
     ? `Showing ${number.format(visible)} of ${number.format(matched.length)} items`
     : "No items match this search.";
 }
@@ -125,6 +146,7 @@ async function loadCatalog(getJson) {
       mods.add(new Option(modNames[namespace] ?? namespace.replaceAll("_", " "), namespace));
     }
     items = data.items;
+    itemsById = new Map(items.map(item => [item.id, item]));
     search.disabled = false;
     mods.disabled = false;
     search.addEventListener("input", filter);
@@ -148,12 +170,12 @@ function variantSelect(label, values) {
   return { field, select };
 }
 
-function renderBreeder(item, slots) {
+function renderBreeder(item, slots, showFeeds) {
   controls.replaceChildren();
   const download = document.createElement("a");
   download.className = "catalog-download";
-  download.textContent = "Download PNG";
-  download.download = "easy-villagers-breeder.png";
+  download.textContent = "Download preview";
+  download.download = "easy-villagers-breeder";
 
   const selections = slots.map((variants, index) => {
     const biomes = new Map();
@@ -193,12 +215,18 @@ function renderBreeder(item, slots) {
 
   function updateImage() {
     const variantId = selections.map(selection => selection()).filter(Boolean).join("+");
-    const image = showImage(detailPicture, { ...item, variantId }, item.id, false, false);
-    download.hidden = !image;
+    const bar = variantId ? item.variants.find(variant => variant.variantId === variantId)?.bar : item.bar;
+    const image = showImage(detailPicture, { ...item, variantId, bar }, item.id, false, false);
+    showFeeds(item.id, item.id, variantId);
+    download.hidden = true;
     if (image) {
-      download.href = image.src;
+      image.addEventListener("load", () => {
+        if (image.parentNode !== detailPicture) return;
+        download.href = image.src;
+        download.hidden = false;
+      }, { once: true });
       image.addEventListener("error", () => {
-        if (download.href === image.src) download.hidden = true;
+        if (image.parentNode === detailPicture) download.hidden = true;
       }, { once: true });
     }
   }
@@ -208,11 +236,11 @@ function renderBreeder(item, slots) {
   updateImage();
 }
 
-function renderDetail(item, getJson) {
+function renderDetail(item, getJson, showFeeds) {
   if (item.id === "easy_villagers:breeder") {
     const slots = [1, 2].map(slot => item.variants.filter(variant => variant.variantId.startsWith("villager_" + slot + "/")));
     if (slots.every(variants => variants.length > 0)) {
-      renderBreeder(item, slots);
+      renderBreeder(item, slots, showFeeds);
       return;
     }
   }
@@ -249,11 +277,16 @@ function renderDetail(item, getJson) {
     selectedItem = selected;
     detailName.textContent = selected.name;
     detailId.textContent = selected.id;
+    showFeeds(item.id, selected.id, selected.variantId);
     for (const { axis, value } of selected.options ?? []) selectors.get(axis).value = value;
     const image = showImage(detailPicture, selected, item.id, false, !glint.checked);
     if (image && glint.checked) {
       effects ??= getJson(routes + "/effects").catch(error => { effects = undefined; throw error; });
-      effects.then(recipe => showGlint(detailPicture, image, recipe.glint)).catch(() => {
+      const ready = image.getAttribute("src") ? Promise.resolve() : new Promise((resolve, reject) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", reject, { once: true });
+      });
+      Promise.all([effects, ready]).then(([recipe]) => showGlint(detailPicture, image, recipe.glint)).catch(() => {
         if (image.parentNode === detailPicture) glint.checked = false;
       });
     }
@@ -278,9 +311,14 @@ async function loadDetail(getJson, encodedId) {
   detailStatus.textContent = "Loading item…";
   try {
     const id = decodeURIComponent(encodedId);
-    const item = await getJson(routes + "/detail?id=" + encodeURIComponent(id));
+    const [item, discovery] = await Promise.all([
+      getJson(routes + "/detail?id=" + encodeURIComponent(id)),
+      getJson("/api/v1/modules").catch(() => null),
+    ]);
     if (request !== detailRequest || location.hash !== requestHash) return;
-    renderDetail(item, getJson);
+    const showFeeds = createItemFeeds(getJson, discovery?.modules ?? [], feedSections, itemsById,
+      () => request === detailRequest && location.hash === requestHash);
+    renderDetail(item, getJson, showFeeds);
     detailStatus.textContent = "";
     detailBody.hidden = false;
     detailName.focus({ preventScroll: true });

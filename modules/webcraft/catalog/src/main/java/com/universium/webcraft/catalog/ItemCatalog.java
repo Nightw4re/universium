@@ -2,6 +2,7 @@ package com.universium.webcraft.catalog;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.universium.webcraft.api.WebCraftPreviewPack;
 import com.universium.webcraft.api.WebCraftReadRoute.Response;
@@ -24,6 +25,7 @@ final class ItemCatalog {
     private static final String BREEDER_ID = "easy_villagers:breeder";
     private final WebCraftPreviewPack previews;
     private final Map<String, Entry> entries;
+    private final Map<String, String> recipePreviewKeys;
     private final JsonObject listing;
     private final JsonObject effects;
 
@@ -34,18 +36,27 @@ final class ItemCatalog {
         Map<String, Entry> index = new HashMap<>();
         JsonArray items = new JsonArray();
         // Sort by identifier so ordering stays stable across language settings and export runs.
-        registered.stream().sorted((first, second) -> first.toString().compareTo(second.toString())).forEach(id -> {
+        exported.keySet().stream().sorted((first, second) -> first.toString().compareTo(second.toString())).forEach(id -> {
             var image = exported.get(id);
-            String key = image == null ? null : image.key();
+            String key = image.key();
             JsonObject item = new JsonObject();
             item.addProperty("id", id.toString());
-            item.addProperty("name", image == null || image.name() == null ? fallbackName(id) : image.name());
+            item.addProperty("name", image.name() == null ? fallbackName(id) : image.name());
             item.addProperty("hasPreview", key != null);
-            index.put(id.toString(), new Entry(item, key, image == null ? List.of() : image.variants(), image != null && image.canGlint()));
+            if (image.bar() != null) item.add("bar", image.bar());
+            index.put(id.toString(), new Entry(item, key, image.variants(), image.canGlint(), image.hasPublicData()));
             items.add(item);
         });
-        addColorFamilies(registered, index);
+        addColorFamilies(exported.keySet(), index);
         entries = Map.copyOf(index);
+        var recipePreviews = new HashMap<String, String>();
+        var recipeIndex = previews.readRecipeItemPreviews();
+        for (var id : registered) {
+            String name = id.toString();
+            String key = stringValue(recipeIndex, name);
+            if (validKey(key)) recipePreviews.put(name, key);
+        }
+        recipePreviewKeys = Map.copyOf(recipePreviews);
         listing = new JsonObject();
         listing.add("items", items);
     }
@@ -69,24 +80,33 @@ final class ItemCatalog {
             return Response.error(400, "invalid_item_id");
         }
         var item = entries.get(selection.id());
-        if (item == null) {
+        if (item == null && selection.variant() != null) {
             return Response.error(404, "preview_not_found");
         }
-        String key = selection.variant() == null ? item.key() : variantKey(item, selection.variant());
+        String key = item == null ? recipePreviewKeys.get(selection.id())
+                : selection.variant() == null ? item.key() : variantKey(item, selection.variant());
         if (selection.secondVariant() == null && animated) {
-            byte[] animation = previews.readAnimation(key);
+            var animation = previews.readAnimationWithFormat(key);
             if (animation != null) {
-                return Response.png(animation);
+                return Response.icon(animation);
             }
         }
-        byte[] icon = selection.secondVariant() == null ? previews.readIcon(key)
-                : BreederIcons.combine(previews.readIcon(item.key()), previews.readIcon(key),
-                        previews.readIcon(variantKey(item, selection.secondVariant())));
-        return icon == null ? Response.error(404, "preview_not_found") : Response.png(icon);
+        var icon = previews.readIconWithFormat(key);
+        if (selection.secondVariant() == null) {
+            return icon == null ? Response.error(404, "preview_not_found") : Response.icon(icon);
+        }
+        byte[] combined = BreederIcons.combine(previews.readIconWithFormat(item.key()), icon,
+                previews.readIconWithFormat(variantKey(item, selection.secondVariant())));
+        return combined == null ? Response.error(404, "preview_not_found") : Response.png(combined);
     }
 
     private static String variantKey(Entry item, String id) {
-        return item.variants().stream().filter(variant -> id.equals(variant.id())).map(Variant::key).findFirst().orElse(null);
+        Variant variant = findVariant(item, id);
+        return variant == null ? null : variant.key();
+    }
+
+    private static Variant findVariant(Entry item, String id) {
+        return item.variants().stream().filter(variant -> id.equals(variant.id())).findFirst().orElse(null);
     }
 
     Response detail(String query) {
@@ -103,7 +123,11 @@ final class ItemCatalog {
         var variants = new JsonArray();
         for (Variant variant : item.variants()) {
             var value = entries.get(variant.itemId()).summary().deepCopy();
-            value.addProperty("hasPreview", true);
+            value.addProperty("hasPreview", variant.key() != null);
+            if (!variant.registryDefault()) {
+                value.remove("bar");
+                if (variant.bar() != null) value.add("bar", variant.bar());
+            }
             value.addProperty("variantId", variant.id());
             value.add("options", variant.options());
             variants.add(value);
@@ -112,7 +136,47 @@ final class ItemCatalog {
         return Response.ok(detail);
     }
 
-    private static Selection selection(String query, boolean allowVariant) {
+    Response stack(String query) {
+        return attachment(query, false);
+    }
+
+    Response tooltip(String query) {
+        return attachment(query, true);
+    }
+
+    private Response attachment(String query, boolean tooltip) {
+        Selection selection = selection(query, true);
+        if (selection == null) return Response.error(400, "invalid_item_id");
+        Entry item = entries.get(selection.id());
+        if (item == null) return Response.error(404, "item_not_found");
+        String itemId = selection.id();
+        String variantId = selection.variant();
+        String exportVariantId = variantId;
+        String unavailable = tooltip ? "tooltip_unavailable" : "stack_data_unavailable";
+        if (variantId != null) {
+            Variant variant = findVariant(item, variantId);
+            if (variant == null) return Response.error(404, "variant_not_found");
+            if (selection.secondVariant() != null) {
+                return Response.error(404, findVariant(item, selection.secondVariant()) == null
+                        ? "variant_not_found" : unavailable);
+            }
+            itemId = variant.itemId();
+            if (variant.registryDefault()) exportVariantId = null;
+        }
+        ResourceLocation id = ResourceLocation.parse(itemId);
+        JsonObject data = tooltip ? previews.readCatalogTooltip(id, exportVariantId)
+                : previews.readCatalogStack(id, exportVariantId);
+        if (!(tooltip ? CatalogData.validTooltip(data) : CatalogData.validStack(data))) {
+            return Response.error(404, unavailable);
+        }
+        data.addProperty("catalogId", selection.id());
+        data.addProperty("itemId", itemId);
+        data.add("variantId", JsonNull.INSTANCE);
+        if (variantId != null) data.addProperty("variantId", variantId);
+        return Response.ok(data);
+    }
+
+    static Selection selection(String query, boolean allowVariant) {
         if (query == null || query.length() > 1200) {
             return null;
         }
@@ -124,7 +188,7 @@ final class ItemCatalog {
         try {
             String id = URLDecoder.decode(params[0].substring(3), StandardCharsets.UTF_8);
             String variant = params.length == 2 ? URLDecoder.decode(params[1].substring(8), StandardCharsets.UTF_8) : null;
-            if (!id.contains(":") || ResourceLocation.tryParse(id) == null) {
+            if (!CatalogData.isId(id)) {
                 return null;
             }
             if (variant == null || validValue(variant)) {
@@ -156,7 +220,9 @@ final class ItemCatalog {
             String name = stringValue(entry, "name");
             String key = stringValue(entry, "previewKey");
             items.putIfAbsent(id, new ExportedItem(name != null && !name.isBlank() && name.length() <= 256 ? name : null,
-                    validKey(key) ? key : null, readVariants(id.toString(), entry.get("variants")), booleanValue(entry.get("canGlint"))));
+                    validKey(key) ? key : null, readVariants(id.toString(), entry.get("variants")),
+                    booleanValue(entry.get("canGlint")), booleanValue(entry.get("hasPublicData")),
+                    readBar(entry.get("bar"))));
         }
         return items;
     }
@@ -175,11 +241,22 @@ final class ItemCatalog {
             String id = stringValue(entry, "id");
             String key = stringValue(entry, "previewKey");
             var options = readOptions(entry.get("options"));
-            if (validValue(id) && validKey(key) && !options.isEmpty() && ids.add(id)) {
-                variants.add(new Variant(id, itemId, key, options));
+            if (validValue(id) && (!entry.has("previewKey") || validKey(key)) && !options.isEmpty() && ids.add(id)) {
+                variants.add(new Variant(id, itemId, key, options, false, readBar(entry.get("bar"))));
             }
         }
         return List.copyOf(variants);
+    }
+
+    private static JsonObject readBar(JsonElement value) {
+        if (!(value instanceof JsonObject bar) || !bar.keySet().equals(Set.of("width", "color"))) return null;
+        Integer width = CatalogData.integer(bar.get("width"), 0, 13);
+        Integer color = CatalogData.integer(bar.get("color"), 0, 0xffffff);
+        if (width == null || color == null) return null;
+        var result = new JsonObject();
+        result.addProperty("width", width);
+        result.addProperty("color", color);
+        return result;
     }
 
     private static JsonArray readOptions(JsonElement value) {
@@ -238,7 +315,7 @@ final class ItemCatalog {
             var shared = List.copyOf(variants);
             for (var member : members) {
                 index.computeIfPresent(member.toString(), (id, entry) -> entry.variants().isEmpty()
-                        ? new Entry(entry.summary(), entry.key(), shared, entry.canGlint()) : entry);
+                        ? new Entry(entry.summary(), entry.key(), shared, entry.canGlint(), entry.hasPublicData()) : entry);
             }
         }
     }
@@ -259,10 +336,10 @@ final class ItemCatalog {
 
     private static void addColorVariant(Map<String, Entry> index, List<Variant> variants, ResourceLocation id, String value, String label) {
         var entry = index.get(id.toString());
-        if (entry.key() != null) {
+        if (entry.key() != null || entry.hasPublicData()) {
             var options = new JsonArray();
             options.add(option("color", value, label));
-            variants.add(new Variant("color/" + value, id.toString(), entry.key(), options));
+            variants.add(new Variant("color/" + value, id.toString(), entry.key(), options, true, null));
         }
     }
 
@@ -297,8 +374,10 @@ final class ItemCatalog {
                 .collect(Collectors.joining(" "));
     }
 
-    private record Selection(String id, String variant, String secondVariant) {}
-    private record Entry(JsonObject summary, String key, List<Variant> variants, boolean canGlint) {}
-    private record ExportedItem(String name, String key, List<Variant> variants, boolean canGlint) {}
-    private record Variant(String id, String itemId, String key, JsonArray options) {}
+    record Selection(String id, String variant, String secondVariant) {}
+    private record Entry(JsonObject summary, String key, List<Variant> variants, boolean canGlint, boolean hasPublicData) {}
+    private record ExportedItem(String name, String key, List<Variant> variants, boolean canGlint,
+                                boolean hasPublicData, JsonObject bar) {}
+    private record Variant(String id, String itemId, String key, JsonArray options, boolean registryDefault,
+                           JsonObject bar) {}
 }

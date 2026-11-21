@@ -3,9 +3,7 @@ package com.universium.webcraft.exporter;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -19,14 +17,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 final class AnimatedPngTest {
     @Test
     void writesLoopingFramesWithExactTickDurationsAndAReadableDefaultImage() throws IOException {
-        byte[] amber = png(0xffffcc00);
-        byte[] clear = png(0);
-        var animation = new AnimatedPng();
+        var amber = pixels(0xff00ccff);
+        var clear = pixels(0);
+        var animation = new AnimationFrames();
         animation.addTick(amber);
         animation.addTick(amber);
         animation.addTick(clear);
         animation.addTick(amber);
-        byte[] bytes = animation.encode();
+        byte[] bytes = AnimatedPng.encode(animation.frames());
         assertEquals(0xffffcc00, ImageIO.read(new ByteArrayInputStream(bytes)).getRGB(32, 32));
 
         var png = ByteBuffer.wrap(bytes).position(8);
@@ -62,10 +60,10 @@ final class AnimatedPngTest {
 
     @Test
     void omitsAnAnimationWhenEveryRenderedFrameIsIdentical() throws IOException {
-        var animation = new AnimatedPng();
-        animation.addTick(png(0xffffcc00));
-        animation.addTick(png(0xffffcc00));
-        assertNull(animation.encode());
+        var animation = new AnimationFrames();
+        animation.addTick(pixels(0xff00ccff));
+        animation.addTick(pixels(0xff00ccff));
+        assertNull(AnimatedPng.encode(animation.frames()));
     }
 
     @Test
@@ -77,11 +75,9 @@ final class AnimatedPngTest {
         assertEquals(0, AnimationTimeline.combine(1, 161));
     }
 
-    private static byte[] png(int color) throws IOException {
-        var image = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
-        image.setRGB(32, 32, color);
-        var bytes = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", bytes);
-        return bytes.toByteArray();
+    private static PngPixels pixels(int rgba) {
+        var pixels = new int[64 * 64];
+        pixels[32 * 64 + 32] = rgba;
+        return new PngPixels(64, 64, pixels);
     }
 }

@@ -1,0 +1,11 @@
+# NeoForge generates this file in config/ at first startup.
+# For per-world settings, place a copy in <level-name>/serverconfig/.
+# The main webcraft-server.toml must also enable the listener for the current server type.
+enabled = false
+
+# INTERNAL uses /api/v1/internal/server-status and requires WEBCRAFT_FEED_TOKEN.
+# PUBLIC uses /api/v1/server-status.
+exposure = "INTERNAL"
+loopbackOnly = false
+# INHERIT uses apiTransport in webcraft-server.toml.
+transport = "INHERIT"

@@ -2,6 +2,10 @@ plugins {
     id "net.neoforged.moddev" version "1.0.11"
 }
 
+base {
+    archivesName = "webcraft"
+}
+
 version = property("modVersion")
 def neoForgeVersion = property("neoVersion")
 def swaggerUiVersion = "5.34.1"
@@ -14,6 +18,10 @@ configurations {
 
 dependencies {
     swaggerUiAssets("org.webjars:swagger-ui:${swaggerUiVersion}")
+    // Minecraft supplies the other Netty modules at this version.
+    def nettyHttp = "io.netty:netty-codec-http:4.1.97.Final"
+    jarJar(implementation(nettyHttp))
+    additionalRuntimeClasspath(nettyHttp) { transitive = false }
 }
 
 testing {
@@ -33,6 +41,10 @@ neoForge {
         }
     }
     runs {
+        client {
+            client()
+            gameDirectory = rootProject.file(".local-artifacts/webcraft-exporter/client")
+        }
         server {
             server()
             gameDirectory = rootProject.file(".local-artifacts/webcraft-core/server")
@@ -40,6 +52,8 @@ neoForge {
         }
     }
 }
+
+apply from: file("../exporter/exporter.gradle")
 
 tasks.named("processResources", ProcessResources).configure {
     def metadata = [mod_version: project.version.toString(), neo_version: neoForgeVersion]

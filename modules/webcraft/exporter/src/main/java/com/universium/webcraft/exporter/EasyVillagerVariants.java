@@ -10,9 +10,11 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 final class EasyVillagerVariants {
     private static final ResourceLocation VILLAGER = ResourceLocation.parse("easy_villagers:villager");
@@ -20,31 +22,34 @@ final class EasyVillagerVariants {
 
     private EasyVillagerVariants() {}
 
-    static List<CatalogPreviewVariant> collect(HolderLookup.Provider registries) {
+    static Iterator<List<CatalogPreviewVariant>> batches(HolderLookup.Provider registries) {
         if (!BuiltInRegistries.ITEM.containsKey(VILLAGER) || !BuiltInRegistries.DATA_COMPONENT_TYPE.containsKey(VILLAGER)) {
-            return List.of();
+            return List.<List<CatalogPreviewVariant>>of().iterator();
         }
         var types = BuiltInRegistries.VILLAGER_TYPE.keySet().stream().sorted(Comparator.comparing(ResourceLocation::toString)).toList();
         var professions = BuiltInRegistries.VILLAGER_PROFESSION.keySet().stream().sorted(Comparator.comparing(ResourceLocation::toString)).toList();
         boolean hasBreeder = BuiltInRegistries.ITEM.containsKey(BREEDER) && BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(BREEDER);
-        var variants = new ArrayList<CatalogPreviewVariant>();
-        for (var type : types) {
-            for (var profession : professions) {
-                String id = type + "/" + profession;
-                var options = List.of(
-                        new CatalogPreviewVariant.Option("biome", type.toString(), label(type)),
-                        new CatalogPreviewVariant.Option("profession", profession.toString(),
-                                profession.toString().equals("minecraft:none") ? "Unemployed" : label(profession)));
-                decode(registries, type, profession).ifPresent(stack -> {
-                    variants.add(new CatalogPreviewVariant(id, stack, options));
-                    if (hasBreeder) {
-                        variants.add(new CatalogPreviewVariant("villager_1/" + id,
-                                breederStack(registries, stack, ItemStack.EMPTY), options));
-                        variants.add(new CatalogPreviewVariant("villager_2/" + id,
-                                breederStack(registries, ItemStack.EMPTY, stack), options));
-                    }
-                });
-            }
+        return IntStream.range(0, types.size() * professions.size()).mapToObj(index ->
+                variants(registries, types.get(index / professions.size()), professions.get(index % professions.size()), hasBreeder))
+                .iterator();
+    }
+
+    private static List<CatalogPreviewVariant> variants(HolderLookup.Provider registries, ResourceLocation type,
+                                                        ResourceLocation profession, boolean hasBreeder) {
+        var stack = decode(registries, type, profession);
+        if (stack.isEmpty()) return List.of();
+        String id = type + "/" + profession;
+        var options = List.of(
+                new CatalogPreviewVariant.Option("biome", type.toString(), label(type)),
+                new CatalogPreviewVariant.Option("profession", profession.toString(),
+                        profession.toString().equals("minecraft:none") ? "Unemployed" : label(profession)));
+        var variants = new ArrayList<CatalogPreviewVariant>(3);
+        variants.add(new CatalogPreviewVariant(id, stack.get(), options));
+        if (hasBreeder) {
+            variants.add(new CatalogPreviewVariant("villager_1/" + id,
+                    breederStack(registries, stack.get(), ItemStack.EMPTY), options));
+            variants.add(new CatalogPreviewVariant("villager_2/" + id,
+                    breederStack(registries, ItemStack.EMPTY, stack.get()), options));
         }
         return variants;
     }

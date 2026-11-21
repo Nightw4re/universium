@@ -1,5 +1,8 @@
 package com.universium.webcraft.catalog;
 
+import com.universium.webcraft.api.WebCraftPreviewPack.Icon;
+import org.glavo.webp.WebPImage;
+
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -11,7 +14,7 @@ final class BreederIcons {
 
     private BreederIcons() {}
 
-    static byte[] combine(byte[] empty, byte[] first, byte[] second) {
+    static byte[] combine(Icon empty, Icon first, Icon second) {
         if (empty == null || first == null || second == null) {
             return null;
         }
@@ -37,8 +40,13 @@ final class BreederIcons {
         }
     }
 
-    private static int[] pixels(byte[] png) throws IOException {
-        var image = ImageIO.read(new ByteArrayInputStream(png));
+    private static int[] pixels(Icon icon) throws IOException {
+        var input = new ByteArrayInputStream(icon.bytes());
+        if (icon.contentType().equals("image/webp")) {
+            var frame = WebPImage.read(input).getFirstFrame();
+            return frame.getWidth() == SIZE && frame.getHeight() == SIZE ? frame.getArgbArray() : null;
+        }
+        var image = ImageIO.read(input);
         return image == null || image.getWidth() != SIZE || image.getHeight() != SIZE
                 ? null : image.getRGB(0, 0, SIZE, SIZE, null, 0, SIZE);
     }

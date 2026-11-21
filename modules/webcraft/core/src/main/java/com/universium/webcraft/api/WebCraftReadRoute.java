@@ -7,7 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import java.util.Objects;
 import java.util.UUID;
 
-/** A private read route by default. Implementations must be safe to call from an HTTP worker. */
+/** A private read route by default. Implementations must be safe to call from an API worker. */
 @FunctionalInterface
 public interface WebCraftReadRoute {
     /** Reads data for the authorized viewer. Access to live game state must run on the server thread. */
@@ -25,10 +25,28 @@ public interface WebCraftReadRoute {
         }
     }
 
+    /** A one-shot, loopback-only machine route protected by the WebCraft feed token. */
+    @FunctionalInterface
+    interface InternalRoute extends WebCraftReadRoute {
+        /** Reads the exact registered internal path with its raw query, or null if there is no query. */
+        Response readInternal(MinecraftServer server, String rawQuery);
+
+        @Override
+        default Response read(MinecraftServer server, UUID viewer) {
+            throw new UnsupportedOperationException("Internal routes require the machine access policy");
+        }
+    }
+
     /** The HTTP status and body returned by the route. */
-    record Response(int status, JsonElement body, byte[] image) {
+    record Response(int status, JsonElement body, byte[] image, String imageContentType) {
         public Response {
             Objects.requireNonNull(body, "body");
+            if (image != null) Objects.requireNonNull(imageContentType, "imageContentType");
+        }
+
+        /** Creates a response with an optional PNG image. */
+        public Response(int status, JsonElement body, byte[] image) {
+            this(status, body, image, image == null ? null : "image/png");
         }
 
         /** Creates a JSON response. */
@@ -43,7 +61,17 @@ public interface WebCraftReadRoute {
 
         /** Returns a validated PNG as a binary response. */
         public static Response png(byte[] image) {
-            return new Response(200, com.google.gson.JsonNull.INSTANCE, Objects.requireNonNull(image, "image"));
+            return bytes(image, "image/png");
+        }
+
+        /** Returns exact bytes with the specified HTTP content type. */
+        public static Response bytes(byte[] bytes, String contentType) {
+            return new Response(200, com.google.gson.JsonNull.INSTANCE, Objects.requireNonNull(bytes, "bytes"), contentType);
+        }
+
+        /** Returns an exported preview in its original format. */
+        public static Response icon(WebCraftPreviewPack.Icon icon) {
+            return new Response(200, com.google.gson.JsonNull.INSTANCE, icon.bytes(), icon.contentType());
         }
 
         /** Returns a failure with a stable error code. */

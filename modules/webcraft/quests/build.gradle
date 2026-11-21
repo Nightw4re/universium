@@ -1,0 +1,51 @@
+plugins {
+    id "net.neoforged.moddev" version "1.0.11"
+}
+
+version = property("modVersion")
+def coreProject = project(":webcraft-core")
+def neoForgeVersion = coreProject.property("neoVersion")
+def ftbQuestsVersion = property("ftbQuestsVersion")
+
+repositories {
+    maven {
+        url = uri("https://maven.ftb.dev/releases")
+        content { includeGroup("dev.ftb.mods") }
+    }
+}
+
+dependencies {
+    implementation coreProject
+    compileOnly("dev.ftb.mods:ftb-quests-neoforge:${ftbQuestsVersion}") { transitive = false }
+    compileOnly("dev.ftb.mods:ftb-teams-neoforge:${property('ftbTeamsVersion')}") { transitive = false }
+    compileOnly("dev.ftb.mods:ftb-library-neoforge:${property('ftbLibraryVersion')}") { transitive = false }
+}
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter("5.10.2")
+        }
+    }
+}
+
+neoForge {
+    version = neoForgeVersion
+    addModdingDependenciesTo sourceSets.test
+    mods {
+        webcraft_core {
+            sourceSet coreProject.sourceSets.main
+        }
+        webcraft_quests {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+tasks.named("processResources", ProcessResources).configure {
+    def metadata = [mod_version: project.version.toString(), neo_version: neoForgeVersion, ftb_quests_version: ftbQuestsVersion]
+    inputs.properties(metadata)
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(metadata)
+    }
+}

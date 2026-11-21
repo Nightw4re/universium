@@ -1,0 +1,38 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="webcraft_quests"
+version="${mod_version}"
+displayName="WebCraft FTB Quests"
+authors="Universium"
+description="Serves a read-only FTB Quests catalog and team completion through the internal WebCraft API."
+
+[[dependencies.webcraft_quests]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_quests]]
+modId="neoforge"
+type="required"
+versionRange="[${neo_version},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.webcraft_quests]]
+modId="webcraft_core"
+type="required"
+versionRange="[0.2.0,0.4.0)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.webcraft_quests]]
+modId="ftbquests"
+type="required"
+versionRange="[${ftb_quests_version},2102)"
+ordering="AFTER"
+side="BOTH"

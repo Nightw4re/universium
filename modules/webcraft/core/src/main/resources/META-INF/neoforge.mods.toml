@@ -5,9 +5,15 @@ license="All Rights Reserved"
 [[mods]]
 modId="webcraft_core"
 version="${mod_version}"
-displayName="WebCraft Core"
+displayName="WebCraft"
 authors="Universium"
-description="Shared module registration and private REST access for WebCraft."
+description="Minecraft HTTP feeds and a client-side preview exporter."
+
+[[mixins]]
+config="webcraft_exporter.mixins.json"
+
+[[mixins]]
+config="webcraft_core.mixins.json"
 
 [[dependencies.webcraft_core]]
 modId="minecraft"
@@ -22,3 +28,15 @@ type="required"
 versionRange="[${neo_version},)"
 ordering="NONE"
 side="BOTH"
+
+[[dependencies.webcraft_core]]
+modId="jei"
+type="optional"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.webcraft_core]]
+modId="emi"
+type="optional"
+ordering="NONE"
+side="CLIENT"

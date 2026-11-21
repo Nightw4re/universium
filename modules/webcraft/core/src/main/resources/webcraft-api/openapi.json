@@ -8,15 +8,84 @@
         "responses": { "200": { "description": "Module discovery document" } }
       }
     },
+    "/api/v1/server-status": {
+      "get": {
+        "summary": "Poll the Minecraft server lifecycle",
+        "responses": {
+          "200": {
+            "description": "Current lifecycle state while WebCraft can respond",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServerStatus" } } }
+          },
+          "400": { "description": "Query parameters are unsupported" },
+          "403": { "description": "A loopback connection is required when the feed is restricted to loopback" }
+        }
+      }
+    },
+    "/api/v1/modules/webcraft_catalog/recipes/recipes": {
+      "get": {
+        "summary": "Get crafting and machine recipes for an output",
+        "description": "Supply exactly one of id, fluid or chemical. Append compact=1 after it to receive shared layout templates and tag references when present. Older archives can return version 1 even when compact=1 is requested.",
+        "parameters": [
+          { "name": "id", "in": "query", "description": "Result item ID", "schema": { "type": "string", "example": "minecraft:iron_pickaxe" } },
+          { "name": "fluid", "in": "query", "description": "Result fluid ID", "schema": { "type": "string", "example": "minecraft:water" } },
+          { "name": "chemical", "in": "query", "description": "Result Mekanism chemical ID", "schema": { "type": "string", "example": "mekanism:hydrogen" } },
+          { "name": "compact", "in": "query", "description": "Keep grouped machine variants and named item tag references.", "schema": { "type": "integer", "enum": [1] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recipes with their schema version and source",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecipeResult" } } }
+          },
+          "400": { "description": "Invalid output query" },
+          "404": { "description": "Recipe snapshot or indexed output unavailable" },
+          "503": { "description": "Recipe snapshot loading" }
+        }
+      }
+    },
+    "/api/v1/modules/webcraft_catalog/recipes/texture": {
+      "get": {
+        "summary": "Get an exported machine recipe ingredient texture",
+        "parameters": [
+          { "name": "hash", "in": "query", "required": true, "schema": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+        ],
+        "responses": {
+          "200": { "description": "Tinted ingredient sprite, with animation when exported", "content": { "image/png": { "schema": { "type": "string", "format": "binary" } }, "image/webp": { "schema": { "type": "string", "format": "binary" } } } },
+          "400": { "description": "Invalid texture hash" },
+          "404": { "description": "Texture unavailable in the installed export" },
+          "503": { "description": "Recipe snapshot loading" }
+        }
+      }
+    },
+    "/api/v1/modules/webcraft_catalog/recipes/tag": {
+      "get": {
+        "summary": "Get the resolved items in an exported recipe tag",
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "string", "example": "minecraft:planks" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved tag members captured from the client",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecipeTag" } } }
+          },
+          "400": { "description": "Invalid tag query" },
+          "404": { "description": "Tag unavailable in the installed export" },
+          "503": { "description": "Recipe snapshot loading" }
+        }
+      }
+    },
     "/api/v1/server-info": {
       "get": {
         "summary": "Get public Minecraft server information",
+        "parameters": [
+          { "name": "iconFormat", "in": "query", "description": "Prefer a WebP icon and fall back to PNG when WebP is unavailable. PNG is the default.", "schema": { "type": "string", "enum": ["webp"] } }
+        ],
         "responses": {
           "200": {
             "description": "Only published and available fields are included",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServerInfo" } } }
           },
-          "400": { "description": "Query parameters are unsupported" }
+          "400": { "description": "Unsupported query" },
+          "403": { "description": "A loopback connection is required when the feed is restricted to loopback" }
         }
       }
     }
@@ -24,12 +93,80 @@
   "components": {
     "securitySchemes": { "viewerToken": { "type": "http", "scheme": "bearer" } },
     "schemas": {
+      "RecipeResult": {
+        "type": "object",
+        "required": ["version", "source", "recipes"],
+        "properties": {
+          "version": { "type": "integer", "enum": [1, 2] },
+          "source": { "type": "string", "enum": ["world_recipe_sync", "jei", "emi", "recipe_viewers"] },
+          "itemId": { "type": "string" },
+          "fluidId": { "type": "string" },
+          "chemicalId": { "type": "string" },
+          "coverage": { "type": "object", "description": "World recipe capture counts" },
+          "skipped": { "type": "integer", "minimum": 0, "description": "Skipped machine recipe captures" },
+          "truncated": { "type": "boolean" },
+          "recipes": {
+            "type": "array",
+            "description": "Standalone recipes. Compact crafting inputs can use tags and optional explicit items in place of exampleItems.",
+            "items": { "type": "object" }
+          },
+          "groups": { "type": "array", "items": { "$ref": "#/components/schemas/MachineRecipeGroup" } },
+          "machineRecipes": { "$ref": "#/components/schemas/RecipeResult" }
+        }
+      },
+      "MachineRecipeGroup": {
+        "type": "object",
+        "required": ["template", "variants"],
+        "properties": {
+          "template": { "type": "object", "description": "Machine recipe fields and slot defaults, with the id supplied by a variant." },
+          "variants": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string", "description": "Original recipe ID" },
+                "slots": {
+                  "type": "object",
+                  "description": "Map of zero-based slot positions to replacement alternatives. An empty array clears a slot.",
+                  "additionalProperties": { "type": "array", "items": { "type": "object" } }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RecipeTag": {
+        "type": "object",
+        "required": ["version", "id", "items"],
+        "properties": {
+          "version": { "type": "integer", "enum": [1] },
+          "id": { "type": "string", "example": "minecraft:planks" },
+          "items": { "type": "array", "items": { "type": "string" }, "example": ["minecraft:acacia_planks", "minecraft:oak_planks"] }
+        }
+      },
+      "ServerStatus": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["starting", "ready", "stopping"] }
+        }
+      },
       "ServerInfo": {
         "type": "object",
         "properties": {
           "serverName": { "type": "string", "example": "Copycraft" },
           "joinAddress": { "type": "string", "example": "play.example.com" },
           "playersOnline": { "type": "integer", "minimum": 0, "example": 0 },
+          "maxPlayers": { "type": "integer", "minimum": 0, "description": "The running Minecraft server's player limit.", "example": 20 },
+          "motd": { "type": "string", "description": "Minecraft server list message of the day." },
+          "serverIcon": { "type": "string", "maxLength": 96000, "description": "The server icon as a PNG or WebP data URL." },
+          "uptimeSeconds": { "type": "integer", "format": "int64", "minimum": 0, "description": "Elapsed seconds since the current server session became ready." },
+          "totalUptimeSeconds": { "type": "integer", "format": "int64", "minimum": 0, "description": "Uptime accumulated for this world while tracking is enabled, including the current session." },
+          "worldAgeDays": { "type": "integer", "format": "int64", "minimum": 0, "description": "Completed 24-hour periods since this world started, including offline time. Omitted when publication is disabled or the start is unknown." },
+          "worldAgeMinutes": { "type": "integer", "format": "int64", "minimum": 0, "description": "Whole real minutes since this world started, including offline time. Present whenever worldAgeDays is present." },
+          "worldTimeTicks": { "type": "integer", "minimum": 0, "maximum": 23999, "description": "Current Overworld time of day. Tick 0 is 06:00 and tick 6000 is noon." },
           "modpack": {
             "type": "object",
             "properties": {

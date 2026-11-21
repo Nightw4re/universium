@@ -1,6 +1,7 @@
 package com.universium.webcraft.exporter;
 
 import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
 
@@ -39,6 +40,11 @@ public final class InventorySpriteCapture implements AutoCloseable {
             }
         }
         return ticks;
+    }
+
+    boolean onlyMissingTexture() {
+        return !sprites.isEmpty()
+                && sprites.stream().allMatch(sprite -> MissingTextureAtlasSprite.getLocation().equals(sprite.name()));
     }
 
     private static int spriteTicks(SpriteContents sprite) {

@@ -12,17 +12,13 @@ import java.util.List;
 final class DyedItemVariants {
     private DyedItemVariants() {}
 
-    static List<CatalogPreviewVariant> collect(List<ItemStack> items) {
+    static List<CatalogPreviewVariant> collect(ItemStack item) {
+        if (!item.is(ItemTags.DYEABLE)) return List.of();
         var variants = new ArrayList<CatalogPreviewVariant>();
-        for (var item : items) {
-            if (!item.is(ItemTags.DYEABLE)) {
-                continue;
-            }
-            variants.add(variant("undyed", "Undyed", item));
-            for (DyeColor dye : DyeColor.values()) {
-                var colored = DyedItemColor.applyDyes(item, List.of(DyeItem.byColor(dye)));
-                variants.add(variant(dye.getName(), DyeItem.byColor(dye).getDescription().getString().replaceFirst(" Dye$", ""), colored));
-            }
+        variants.add(variant("undyed", "Undyed", item));
+        for (DyeColor dye : DyeColor.values()) {
+            var colored = DyedItemColor.applyDyes(item, List.of(DyeItem.byColor(dye)));
+            variants.add(variant(dye.getName(), DyeItem.byColor(dye).getDescription().getString().replaceFirst(" Dye$", ""), colored));
         }
         return variants;
     }

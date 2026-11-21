@@ -7,6 +7,7 @@ import com.universium.webcraft.api.WebCraftReadRoute;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 final class ApiDocumentation {
@@ -20,8 +21,19 @@ final class ApiDocumentation {
     static Map<String, Asset> load(Map<String, WebCraftReadRoute> routes) throws IOException {
         var spec = JsonParser.parseString(new String(read("openapi.json"), StandardCharsets.UTF_8)).getAsJsonObject();
         JsonObject paths = spec.getAsJsonObject("paths");
+        if (!routes.containsKey(WebCraftRoutes.MODULES_PATH)) {
+            paths.remove(WebCraftRoutes.MODULES_PATH);
+        }
         if (!routes.containsKey(ServerInfoRoute.PATH)) {
             paths.remove(ServerInfoRoute.PATH);
+        }
+        if (!routes.containsKey(ServerStatusRoute.PATH)) {
+            paths.remove(ServerStatusRoute.PATH);
+        }
+        for (String route : List.of("/api/v1/modules/webcraft_catalog/recipes/recipes",
+                "/api/v1/modules/webcraft_catalog/recipes/tag",
+                "/api/v1/modules/webcraft_catalog/recipes/texture")) {
+            if (!routes.containsKey(route)) paths.remove(route);
         }
         routes.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             if (!paths.has(entry.getKey())) {

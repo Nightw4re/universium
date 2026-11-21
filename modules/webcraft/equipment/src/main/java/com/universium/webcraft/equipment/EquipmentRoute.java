@@ -101,10 +101,6 @@ final class EquipmentRoute {
         return Response.ok(response);
     }
 
-    static Snapshot capture(String player, Function<EquipmentSlot, ItemStack> equipment) {
-        return capture(player, equipment, stack -> null);
-    }
-
     static Snapshot capture(String player, Function<EquipmentSlot, ItemStack> equipment,
                             Function<ItemStack, String> previewKey) {
         List<Slot> slots = SLOTS.stream().map(slot -> {

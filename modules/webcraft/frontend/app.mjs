@@ -1,6 +1,7 @@
 import { renderPreview } from "./preview.mjs";
 import { showItems } from "./catalog.mjs";
 import { showDesign } from "./designs.mjs";
+import { getJson } from "./api.mjs";
 
 const labels = {
   head: "Head",
@@ -59,20 +60,6 @@ function showEquipment(data) {
     }).catch(() => {});
     return card;
   }));
-}
-
-async function getJson(path, token) {
-  const response = await fetch(path, {
-    headers: token ? { Authorization: "Bearer " + token } : {},
-    credentials: "omit",
-    mode: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(8000),
-  });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error);
-  return body;
 }
 
 form.addEventListener("submit", async event => {

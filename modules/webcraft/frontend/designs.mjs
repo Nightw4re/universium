@@ -1,5 +1,6 @@
 import { bannerEditor } from "./banners.mjs";
 import { armorComparison } from "./armor.mjs";
+import { imageSource } from "./api.mjs";
 
 const namespace = "webcraft_designs";
 const views = { banners: bannerEditor, armor: armorComparison };
@@ -52,8 +53,11 @@ function textureLoader(route) {
   return hash => {
     if (!pending.has(hash)) {
       const image = new Image();
-      image.src = route + "?" + new URLSearchParams({ hash });
-      pending.set(hash, image.decode().then(() => image).catch(error => {
+      pending.set(hash, imageSource(route + "?" + new URLSearchParams({ hash })).then(async source => {
+        image.src = source;
+        await image.decode();
+        return image;
+      }).catch(error => {
         pending.delete(hash);
         throw error;
       }));

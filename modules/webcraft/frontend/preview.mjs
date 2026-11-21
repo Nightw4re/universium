@@ -19,20 +19,20 @@ function project([x, y, z], size) {
   return [size * (0.5 + 0.625 * rotatedX), size * (0.5 - 0.625 * rotatedY)];
 }
 
-async function imageFromPng(png) {
-  if (typeof png !== "string" || !/^[A-Za-z0-9+/]{1,87382}={0,2}$/.test(png)) {
+async function imageFromBase64(bytes, contentType = "image/png") {
+  if (typeof bytes !== "string" || !/^[A-Za-z0-9+/]{1,87382}={0,2}$/.test(bytes)) {
     throw new Error("Invalid preview image");
   }
   const image = new Image();
   image.alt = "";
-  image.src = "data:image/png;base64," + png;
+  image.src = `data:${contentType};base64,${bytes}`;
   await image.decode();
   return image;
 }
 
 async function renderLayered(preview) {
   if (!Number.isInteger(preview.tint) || preview.tint < 0 || preview.tint > 0xffffff) return null;
-  const [base, overlay] = await Promise.all([imageFromPng(preview.base), imageFromPng(preview.overlay)]);
+  const [base, overlay] = await Promise.all([imageFromBase64(preview.base), imageFromBase64(preview.overlay)]);
   const canvas = document.createElement("canvas");
   canvas.width = base.width;
   canvas.height = base.height;
@@ -58,10 +58,13 @@ async function renderLayered(preview) {
 
 export async function renderPreview(preview) {
   if (preview?.type === "sprite") {
-    const image = await imageFromPng(preview.png);
-    const animation = preview.animation;
+    const image = preview.webp == null
+      ? await imageFromBase64(preview.png)
+      : await imageFromBase64(preview.webp, "image/webp");
+    const animation = preview.animationWebp ?? preview.animation;
     if (typeof animation === "string" && animation.length <= 4194304 && /^[A-Za-z0-9+/]+={0,2}$/.test(animation)) {
-      return motionPicture(image, "data:image/png;base64," + animation);
+      const animationType = preview.animationWebp == null ? "image/png" : "image/webp";
+      return motionPicture(image, `data:${animationType};base64,${animation}`);
     }
     return image;
   }
@@ -74,7 +77,7 @@ export async function renderPreview(preview) {
   const faces = await Promise.all(Object.entries(faceCorners).map(async ([face, corners]) => ({
     face,
     corners,
-    image: await imageFromPng(preview.faces?.[face]),
+    image: await imageFromBase64(preview.faces?.[face]),
   })));
   const canvas = document.createElement("canvas");
   canvas.width = 144;

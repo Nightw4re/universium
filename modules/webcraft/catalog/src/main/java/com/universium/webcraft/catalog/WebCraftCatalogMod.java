@@ -21,7 +21,10 @@ import java.util.stream.Collectors;
 public final class WebCraftCatalogMod {
     public static final String MOD_ID = "webcraft_catalog";
     private static final ResourceLocation MODULE = ResourceLocation.fromNamespaceAndPath(MOD_ID, "items");
+    private static final ResourceLocation RECIPES = ResourceLocation.fromNamespaceAndPath(MOD_ID, "recipes");
+    private static final ResourceLocation TOOLTIPS = ResourceLocation.fromNamespaceAndPath(MOD_ID, "tooltips");
     private volatile ItemCatalog catalog;
+    private volatile RecipeSnapshot recipeSnapshot;
 
     public WebCraftCatalogMod(IEventBus modBus) {
         modBus.addListener(this::register);
@@ -45,14 +48,38 @@ public final class WebCraftCatalogMod {
             ItemCatalog current = catalog;
             return current == null ? Response.error(503, "catalog_not_ready") : current.effects(query);
         };
-        event.register(MODULE, Map.of("items", items, "icon", icon, "detail", detail, "effects", effects));
+        WebCraftReadRoute.PublicRoute stack = query -> {
+            ItemCatalog current = catalog;
+            return current == null ? Response.error(503, "catalog_not_ready") : current.stack(query);
+        };
+        WebCraftReadRoute.PublicRoute tooltip = query -> {
+            ItemCatalog current = catalog;
+            return current == null ? Response.error(503, "catalog_not_ready") : current.tooltip(query);
+        };
+        WebCraftReadRoute.PublicRoute recipes = query -> {
+            RecipeSnapshot current = recipeSnapshot;
+            return current == null ? Response.error(503, "recipes_not_ready") : current.find(query);
+        };
+        WebCraftReadRoute.PublicRoute recipeTag = query -> {
+            RecipeSnapshot current = recipeSnapshot;
+            return current == null ? Response.error(503, "recipes_not_ready") : current.tag(query);
+        };
+        WebCraftReadRoute.PublicRoute recipeTexture = query -> {
+            RecipeSnapshot current = recipeSnapshot;
+            return current == null ? Response.error(503, "recipes_not_ready") : current.texture(query);
+        };
+        event.register(MODULE, Map.of("items", items, "icon", icon, "detail", detail, "effects", effects, "stack", stack));
+        event.register(RECIPES, Map.of("recipes", recipes, "tag", recipeTag, "texture", recipeTexture));
+        event.register(TOOLTIPS, Map.of("tooltip", tooltip));
     }
 
     private void prepareCatalog(ServerStartedEvent event) {
         if (event.getServer().isDedicatedServer()) {
             var registered = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR)
                     .map(BuiltInRegistries.ITEM::getKey).collect(Collectors.toUnmodifiableSet());
-            catalog = new ItemCatalog(registered, new WebCraftPreviewPack(Path.of("webcraft-assets", "previews.zip")));
+            var previews = new WebCraftPreviewPack(Path.of("webcraft-assets", "previews.zip"));
+            catalog = new ItemCatalog(registered, previews);
+            recipeSnapshot = new RecipeSnapshot(registered, previews);
         }
     }
 }

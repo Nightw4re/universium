@@ -11,6 +11,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.DyedItemColor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -81,7 +83,7 @@ final class EquipmentRouteTest {
         }
         JsonObject special = route.read(Runnable::run,
                 () -> EquipmentRoute.capture("TestViewer", slot -> slot == EquipmentSlot.OFFHAND
-                        ? new ItemStack(Items.SHIELD) : ItemStack.EMPTY)).body().getAsJsonObject();
+                        ? new ItemStack(Items.SHIELD) : ItemStack.EMPTY, stack -> null)).body().getAsJsonObject();
         assertEquals("unsupported_model", preview(special, "offhand").get("reason").getAsString());
 
         ItemStack red = dyedChestplate(0xAA1122);
@@ -90,7 +92,7 @@ final class EquipmentRouteTest {
             case CHEST -> red;
             case OFFHAND -> blue;
             default -> ItemStack.EMPTY;
-        })).body().getAsJsonObject();
+        }, stack -> null)).body().getAsJsonObject();
         var redPreview = preview(armor, "chest");
         var bluePreview = preview(armor, "offhand");
         assertEquals("layered", redPreview.get("type").getAsString());
@@ -104,8 +106,10 @@ final class EquipmentRouteTest {
         }
     }
 
-    @Test
-    void usesAnExportedPreviewForTheExactVariantEvenWithoutVanillaAssets(@TempDir Path root) throws IOException {
+    @ParameterizedTest
+    @ValueSource(strings = {"png", "webp"})
+    void usesAnExportedPreviewForTheExactVariantEvenWithoutVanillaAssets(String format, @TempDir Path root)
+            throws IOException {
         var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         var red = dyedChestplate(0xAA1122);
         var blue = dyedChestplate(0x2233BB);
@@ -118,12 +122,14 @@ final class EquipmentRouteTest {
         icon.setRGB(32, 32, 0xFFFF2200);
         var png = new ByteArrayOutputStream();
         ImageIO.write(icon, "png", png);
+        byte[] exported = format.equals("png") ? png.toByteArray() : Base64.getDecoder().decode(
+                "UklGRigAAABXRUJQVlA4TBwAAAAvP8APEA8wVSMyqgMY8CCTtkn9i9/OiP6nCzIc");
         try (var zip = new ZipOutputStream(Files.newOutputStream(root.resolve("previews.zip")))) {
             zip.putNextEntry(new ZipEntry("format.txt"));
             zip.write("webcraft-previews-v1/1.21.1\n".getBytes(StandardCharsets.US_ASCII));
             zip.closeEntry();
-            zip.putNextEntry(new ZipEntry("previews/" + redKey + ".png"));
-            zip.write(png.toByteArray());
+            zip.putNextEntry(new ZipEntry("previews/" + redKey + "." + format));
+            zip.write(exported);
             zip.closeEntry();
         }
         var route = new EquipmentRoute(new EquipmentPreviews(root.resolve("client.jar")));
@@ -134,7 +140,7 @@ final class EquipmentRouteTest {
         }, stack -> EquipmentPreviewPack.key(stack, registries))).body().getAsJsonObject();
         var fromPack = preview(response, "chest");
         assertEquals("sprite", fromPack.get("type").getAsString());
-        assertArrayEquals(png.toByteArray(), Base64.getDecoder().decode(fromPack.get("png").getAsString()));
+        assertArrayEquals(exported, Base64.getDecoder().decode(fromPack.get(format).getAsString()));
         assertEquals("assets_unavailable", preview(response, "offhand").get("reason").getAsString());
     }
 
@@ -150,7 +156,7 @@ final class EquipmentRouteTest {
         var equipped = Map.of(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET),
                 EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD),
                 EquipmentSlot.OFFHAND, new ItemStack(Items.CRAFTING_TABLE, 8), EquipmentSlot.FEET, boots);
-        return EquipmentRoute.capture("TestViewer", slot -> equipped.getOrDefault(slot, ItemStack.EMPTY));
+        return EquipmentRoute.capture("TestViewer", slot -> equipped.getOrDefault(slot, ItemStack.EMPTY), stack -> null);
     }
 
     private static void assertTexture(ZipFile jar, String texture, JsonElement encoded) throws IOException {

@@ -1,27 +1,35 @@
 package com.universium.webcraft.core;
 
 import com.google.gson.JsonObject;
-import com.universium.webcraft.api.WebCraftReadRoute.PublicRoute;
+import com.universium.webcraft.api.WebCraftChanges;
+import com.universium.webcraft.api.WebCraftLiveRoute;
 import com.universium.webcraft.api.WebCraftReadRoute.Response;
 
 import java.util.Optional;
 
-final class ServerInfoRoute implements PublicRoute {
+final class ServerInfoRoute implements WebCraftLiveRoute.Public {
+    private final WebCraftChanges changes = new WebCraftChanges();
+
+    @Override
+    public WebCraftChanges changes() {
+        return changes;
+    }
     static final String PATH = "/api/v1/server-info";
 
     private final JsonObject metadata = new JsonObject();
-    private final boolean publishPlayerCount;
-    private volatile int playersOnline;
+    private volatile Snapshot snapshot;
 
-    ServerInfoRoute(String serverName, String joinAddress, boolean publishPlayerCount,
-                    Optional<ModpackMetadata.Identity> identity, boolean publishName, boolean publishVersion) {
-        this.publishPlayerCount = publishPlayerCount;
+    ServerInfoRoute(String serverName, String joinAddress) {
         if (!serverName.isBlank()) {
             metadata.addProperty("serverName", serverName.strip());
         }
         if (!joinAddress.isBlank()) {
             metadata.addProperty("joinAddress", joinAddress.strip());
         }
+        publish(new JsonObject(), null, null);
+    }
+
+    void initializeModpack(Optional<ModpackMetadata.Identity> identity, boolean publishName, boolean publishVersion) {
         if (identity.isPresent() && (publishName || publishVersion)) {
             JsonObject pack = new JsonObject();
             if (publishName) {
@@ -32,25 +40,36 @@ final class ServerInfoRoute implements PublicRoute {
             }
             metadata.add("modpack", pack);
         }
+        publish(new JsonObject(), null, null);
     }
 
-    boolean publishesPlayerCount() {
-        return publishPlayerCount;
-    }
-
-    void updatePlayerCount(int count) {
-        playersOnline = count;
+    void publish(JsonObject liveFields, String pngIcon, String webpIcon) {
+        var next = metadata.deepCopy();
+        liveFields.entrySet().forEach(field -> next.add(field.getKey(), field.getValue()));
+        if (pngIcon != null) {
+            next.addProperty("serverIcon", pngIcon);
+        }
+        var preferred = next;
+        if (webpIcon != null) {
+            preferred = next.deepCopy();
+            preferred.addProperty("serverIcon", webpIcon);
+        }
+        var published = new Snapshot(next, preferred);
+        if (!published.equals(snapshot)) {
+            snapshot = published;
+            changes.changed();
+        }
     }
 
     @Override
     public Response readPublic(String rawQuery) {
-        if (rawQuery != null) {
-            return Response.error(400, "unsupported_query");
-        }
-        JsonObject result = metadata.deepCopy();
-        if (publishPlayerCount) {
-            result.addProperty("playersOnline", playersOnline);
-        }
-        return Response.ok(result);
+        var current = snapshot;
+        return switch (rawQuery) {
+            case null -> Response.ok(current.png());
+            case "iconFormat=webp" -> Response.ok(current.webpPreferred());
+            default -> Response.error(400, "unsupported_query");
+        };
     }
+
+    private record Snapshot(JsonObject png, JsonObject webpPreferred) {}
 }
