@@ -20,3 +20,7 @@ archive/*/.eclipse/
 archive/*/bin/
 config/webcraft.metadata
 config/webcraft-cache/
+
+# Python bytecode
+__pycache__/
+*.pyc
