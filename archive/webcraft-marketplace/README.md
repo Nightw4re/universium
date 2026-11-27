@@ -6,7 +6,7 @@ It does not start its own HTTP server.
 
 Instead, it depends on the core `webcraft` module and registers additional REST routes into the shared WebCraft runtime.
 
-## Current Route
+## Prototype route
 
 - `GET /api/marketplace/hello`
 

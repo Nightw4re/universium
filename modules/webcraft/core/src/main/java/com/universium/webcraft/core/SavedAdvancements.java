@@ -21,10 +21,9 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /** Loads detached progress on an API worker, using Minecraft's save format and migrations. */
@@ -41,22 +40,22 @@ final class SavedAdvancements {
                 Codec.unboundedMap(ResourceLocation.CODEC, AdvancementProgress.CODEC), fixer, LEGACY_DATA_VERSION);
     }
 
-    Set<ResourceLocation> completed(UUID player, List<AdvancementSnapshots.Entry> catalog) throws IOException {
+    Map<ResourceLocation, Long> completed(UUID player, List<AdvancementSnapshots.Entry> catalog) throws IOException {
         Map<ResourceLocation, AdvancementProgress> progress;
         try {
             progress = read(directory.resolve(player.toString() + ".json"));
         } catch (NoSuchFileException exception) {
-            return Set.of();
+            return Map.of();
         } catch (JsonParseException exception) {
             throw new IOException("Invalid saved advancements", exception);
         }
 
-        var completed = new HashSet<ResourceLocation>();
+        var completed = new HashMap<ResourceLocation, Long>();
         for (var entry : catalog) {
             var saved = progress.get(entry.id());
             if (saved != null) {
                 saved.update(entry.requirements());
-                if (saved.isDone()) completed.add(entry.id());
+                if (saved.isDone()) completed.put(entry.id(), AdvancementSnapshots.completedAt(saved, entry.requirements()));
             }
         }
         return completed;

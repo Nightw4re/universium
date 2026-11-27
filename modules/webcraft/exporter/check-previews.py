@@ -2,11 +2,13 @@
 
 import argparse
 from collections import Counter
+from functools import lru_cache
 from io import BytesIO
 import json
 from zipfile import ZipFile
 
 from PIL import Image
+from preview_atlas import GRID, IMAGE_SIZE, TILE_SIZE, image_path, read_atlas_index
 
 
 def is_missing_texture(bounding_image):
@@ -31,20 +33,32 @@ def is_missing_texture(bounding_image):
     return colors[0] == colors[3] and colors[1] == colors[2] and colors[0] != colors[1]
 
 
-def check_image(archive, names, key):
-    for extension in ("webp", "png"):
-        name = f"previews/{key}.{extension}"
-        if name in names:
-            break
-    else:
-        return "missing_image_file"
+def load_image(archive, name, size):
+    with Image.open(BytesIO(archive.read(name))) as source:
+        return source.convert("RGBA") if source.size == (size, size) else None
+
+
+def check_image(archive, names, key, sprite, load_sheet):
     try:
-        with Image.open(BytesIO(archive.read(name))) as source:
-            if source.size != (64, 64):
-                return "unexpected_image_size"
-            image = source.convert("RGBA")
+        for extension in ("webp", "png"):
+            name = f"previews/{key}.{extension}"
+            if name in names:
+                image = load_image(archive, name, TILE_SIZE)
+                break
+        else:
+            if sprite is None:
+                return "missing_image_file"
+            sheet, tile = sprite
+            image = load_sheet(sheet)
+            if image is not None:
+                x, y = tile % GRID * TILE_SIZE, tile // GRID * TILE_SIZE
+                image = image.crop((x, y, x + TILE_SIZE, y + TILE_SIZE))
+    except KeyError:
+        return "missing_image_file"
     except (OSError, ValueError, Image.DecompressionBombError):
         return "invalid_image"
+    if image is None:
+        return "unexpected_image_size"
     bounds = image.getchannel("A").getbbox()
     if bounds is None:
         return "transparent_image"
@@ -54,6 +68,12 @@ def check_image(archive, names, key):
 def audit(path, selected):
     with ZipFile(path) as archive:
         names = set(archive.namelist())
+        hashes, sprites = read_atlas_index(archive, names)
+
+        @lru_cache(maxsize=4)
+        def load_sheet(index):
+            return load_image(archive, image_path(hashes[index]), IMAGE_SIZE)
+
         items = json.loads(archive.read("catalog.json"))
         diagnostics = {}
         if "export-diagnostics.json" in names:
@@ -74,7 +94,7 @@ def audit(path, selected):
                 counts["checked"] += 1
                 key = entry.get("previewKey")
                 if key and key not in cache:
-                    cache[key] = check_image(archive, names, key)
+                    cache[key] = check_image(archive, names, key, sprites.get(key), load_sheet)
                 reason = cache[key] if key else diagnostics.get((item, variant), "missing_preview_key")
                 if reason:
                     issue = {"id": item, "reason": reason}

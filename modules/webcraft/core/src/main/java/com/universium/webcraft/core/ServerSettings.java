@@ -15,9 +15,12 @@ final class ServerSettings {
     final ModConfigSpec.ConfigValue<List<? extends String>> enabledModules;
     final ModConfigSpec.ConfigValue<String> viewerUuid;
     final ModConfigSpec.BooleanValue apiDocsEnabled;
+    final ModConfigSpec.BooleanValue accountLinksEnabled;
+    final ModConfigSpec.BooleanValue accountLinksAllowRemote;
     final ModConfigSpec.BooleanValue playerHistoryEnabled;
     final ModConfigSpec.BooleanValue onlinePlayersEnabled;
     final ModConfigSpec.BooleanValue playerRosterEnabled;
+    final ModConfigSpec.BooleanValue playerPrivacyEnabled;
     final ModConfigSpec.BooleanValue playerHistoryLoopbackOnly;
     final ModConfigSpec.BooleanValue onlinePlayersLoopbackOnly;
     final ModConfigSpec.BooleanValue playerRosterLoopbackOnly;
@@ -54,6 +57,12 @@ final class ServerSettings {
                 .define("viewerUuid", "");
         apiDocsEnabled = builder.comment("Expose public Swagger UI and the OpenAPI document.")
                 .define("apiDocsEnabled", false);
+        accountLinksEnabled = builder.comment("Enable /webcraft link and the HTTP redemption endpoint on dedicated servers.",
+                        "Requires the WEBCRAFT_ACCOUNT_LINK_TOKEN environment variable and an active API listener.")
+                .define("accountLinksEnabled", false);
+        accountLinksAllowRemote = builder.comment("Allow account link redemption from non-loopback TCP peers.",
+                        "Enable only on a protected private connection. Never forward the internal route from a public proxy.")
+                .define("accountLinksAllowRemote", false);
         playerHistoryEnabled = builder.comment("Record player joins and expose the history through the token-protected internal feed.")
                 .define("playerHistoryEnabled", false);
         playerHistoryLoopbackOnly = builder.comment("Restrict the player history feed to direct loopback connections.")
@@ -69,6 +78,9 @@ final class ServerSettings {
         playerRosterEnabled = builder.comment("Expose identities from this world's saved player records and track future logins.",
                         "Uses a token-protected internal feed.")
                 .define("playerRosterEnabled", false);
+        playerPrivacyEnabled = builder.comment("Enable the HTTP-only machine endpoint for storing player privacy settings.",
+                        "The endpoint always requires loopback and the WebCraft feed token.")
+                .define("playerPrivacyEnabled", false);
         playerRosterLoopbackOnly = builder.comment("Restrict the player roster feed to direct loopback connections.")
                 .define("playerRosterLoopbackOnly", true);
         playerRosterTransport = builder.comment("Override apiTransport for the player roster feed.")

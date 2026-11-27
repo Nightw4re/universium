@@ -1,6 +1,7 @@
 def jeiVersion = property("jeiVersion")
 def emiVersion = property("emiVersion")
 def chicoryVersion = "1.7.5"
+def lwjglCuda = "org.lwjgl:lwjgl-cuda:3.3.3"
 
 def exporter = file("../exporter")
 def encoderWasm = new File(exporter, "codec/encoder.wasm")
@@ -51,12 +52,14 @@ dependencies {
     compileOnly "mezz.jei:jei-1.21.1-neoforge-api:${jeiVersion}"
     compileOnly "dev.emi:emi-neoforge:${emiVersion}:api"
     compileOnly("net.createmod.ponder:ponder-neoforge:${property('ponderVersion')}") { transitive = false }
+    // Minecraft provides LWJGL core and OpenGL. The CUDA binding loads the system driver.
+    jarJar(implementation(lwjglCuda) { transitive = false })
+    additionalRuntimeClasspath(lwjglCuda) { transitive = false }
     for (def artifact : ["runtime", "wasm"]) {
         def library = "com.dylibso.chicory:${artifact}:${chicoryVersion}"
         jarJar(implementation(library))
         additionalRuntimeClasspath(library)
     }
-    testImplementation "org.glavo:webp:0.2.0"
 }
 
 tasks.named("processResources", ProcessResources).configure {

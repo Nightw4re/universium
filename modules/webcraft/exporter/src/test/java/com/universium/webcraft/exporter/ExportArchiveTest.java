@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -112,8 +112,8 @@ final class ExportArchiveTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void archivesAllSixteenWebpFramesWithExactPixelsAndTiming(boolean warmUpSprites) throws Exception {
+    @CsvSource({"false,false", "true,false", "false,true", "true,true"})
+    void archivesAllSixteenWebpFramesWithExactPixelsAndTiming(boolean warmUpSprites, boolean skipRepeatReadback) throws Exception {
         MinecraftTestBootstrap.initialize();
         var output = directory.resolve("previews.zip");
         var preview = new StaticPreviewWriter(StaticPreviewWriter.Format.WEBP);
@@ -129,7 +129,9 @@ final class ExportArchiveTest {
             }
             for (int tick = 0; tick < 32; tick++) {
                 int frame = tick / 2;
-                animation.tick(stack -> animationPixels(frame), archive);
+                boolean repeats = tick % 2 == 1;
+                animation.tick((stack, slot, first, warmup) ->
+                        skipRepeatReadback && (warmup || (repeats && !first)) ? null : animationPixels(frame), archive);
             }
             assertTrue(animation.hasPending());
             for (int tick = 0; tick < (warmUpSprites ? 4 : 2); tick++) {

@@ -3,9 +3,11 @@ package com.universium.webcraft.catalog;
 import com.universium.webcraft.api.RegisterWebCraftModulesEvent;
 import com.universium.webcraft.api.WebCraftPreviewPack;
 import com.universium.webcraft.api.WebCraftReadRoute;
+import com.universium.webcraft.api.WebCraftReloadEvent;
 import com.universium.webcraft.api.WebCraftReadRoute.Response;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -28,7 +30,8 @@ public final class WebCraftCatalogMod {
 
     public WebCraftCatalogMod(IEventBus modBus) {
         modBus.addListener(this::register);
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, this::prepareCatalog);
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, (ServerStartedEvent event) -> prepareCatalog(event.getServer()));
+        NeoForge.EVENT_BUS.addListener((WebCraftReloadEvent event) -> prepareCatalog(event.server()));
     }
 
     private void register(RegisterWebCraftModulesEvent event) {
@@ -73,8 +76,8 @@ public final class WebCraftCatalogMod {
         event.register(TOOLTIPS, Map.of("tooltip", tooltip));
     }
 
-    private void prepareCatalog(ServerStartedEvent event) {
-        if (event.getServer().isDedicatedServer()) {
+    private void prepareCatalog(MinecraftServer server) {
+        if (server.isDedicatedServer()) {
             var registered = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR)
                     .map(BuiltInRegistries.ITEM::getKey).collect(Collectors.toUnmodifiableSet());
             var previews = new WebCraftPreviewPack(Path.of("webcraft-assets", "previews.zip"));

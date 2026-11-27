@@ -47,6 +47,10 @@ final class EquipmentPreviews {
         return pack;
     }
 
+    void reload() {
+        previews.clear();
+    }
+
     static boolean usesLeatherLayers(ResourceLocation item) {
         return "minecraft".equals(item.getNamespace()) && LEATHER_ARMOR.contains(item.getPath());
     }

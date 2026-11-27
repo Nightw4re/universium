@@ -1,6 +1,6 @@
 # Universium Web Bridge
 
-Historical architecture reference. See the [WebCraft guide](../modules/webcraft/README.md) for the current modules and REST contract.
+Historical, superseded architecture proposal. See the [WebCraft index](../modules/webcraft/README.md) for the implemented modules and API contracts.
 
 **Universium Web Bridge** is a universal web integration layer for NeoForge Minecraft servers and modpacks. It provides shared web infrastructure that other mods can use to expose their own scoped APIs, WebSocket events, permissions, and optional frontend modules.
 

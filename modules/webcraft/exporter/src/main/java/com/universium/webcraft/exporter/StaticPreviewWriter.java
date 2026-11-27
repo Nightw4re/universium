@@ -47,7 +47,7 @@ final class StaticPreviewWriter {
         return AnimatedWebp.encode(frames, this::encodeWebp);
     }
 
-    private byte[] encodeWebp(PngPixels pixels) throws IOException {
+    byte[] encodeWebp(PngPixels pixels) throws IOException {
         try {
             return encode(encoders.get(), pixels);
         } catch (IOException | LinkageError | RuntimeException exception) {

@@ -1,62 +1,28 @@
-# AI Rules
+# Universium development guide
 
-This repository is a Minecraft mod project named `Universium`.
+[Repository guidance](AGENTS.md) defines the required scope, Git and verification policies. Use the sections here for coding, local operations and commits.
 
-## Core goals
+## Code conventions
 
-- Keep the architecture clean and testable.
-- Prefer pure Java domain logic outside Minecraft-specific integration.
-- Use immutable data models where practical.
-- Avoid giant classes and hidden global state.
-- Keep namespaces, mappings, and APIs deterministic.
+- Prefer small, testable pure Java logic, immutable data models, and constructor injection or explicit wiring. Avoid oversized classes and hidden global state.
+- Keep namespaces, mappings and APIs deterministic. Document public Java APIs with JavaDoc. Separate API, server, auth, permissions, security, frontend, config, module and test-support responsibilities where relevant. Follow the existing package layout.
+- Prefer unit tests, then integration-style tests with temporary directories. Report checks that were skipped or selected no tests.
 
-## Scope rules
+## Build and verification
 
-- Do not patch third-party mods unless explicitly required by a bridge integration.
-- Do not build universal hacks that bypass mod or server rules.
-- Do not rewrite or overwrite other mods' assets.
-- Keep the current MVP focused on:
-  - web bridge infrastructure
-  - scoped module registration
-  - route and socket registries
-  - auth/session handling
-  - permissions and roles
-  - frontend asset hosting
-  - security and rate limiting
+- Use Gradle from the repository root. [settings.gradle](settings.gradle) lists the active projects, and module-local `gradle.properties` files own versioning. Keep module versions there.
+- Use `gradle :<project>:test` for an affected module and `gradle :<project>:build` when its artifact is affected. Use `gradle test` for broad Java verification.
+- Use `gradle runClient` or `gradle runServer` for WebCraft development. See [WebCraft](modules/webcraft/README.md) for settings. The [frontend guide](modules/webcraft/frontend/README.md) owns the preview and static bundle commands.
+- Use existing repository entrypoints for the [preview exporter](modules/webcraft/exports.md#run-a-curseforge-export-from-the-command-line) and [Graphify](docs/graphify.md).
 
-## Code rules
+## Local workflows and artifacts
 
-- Prefer constructor injection or explicit wiring.
-- Keep public APIs documented with JavaDoc.
-- Use English only for code comments, documentation, and commit messages.
-- Use clear package boundaries:
-  - `api`
-  - `server`
-  - `auth`
-  - `permissions`
-  - `security`
-  - `frontend`
-  - `config`
-  - `module`
-  - `testsupport`
-- Keep Minecraft/NeoForge code thin and delegate logic to module services.
-
-## Testing rules
-
-- Add tests for all non-trivial logic.
-- Keep tests deterministic.
-- Prefer unit tests first, then integration-style tests with temp directories.
-- Verify changes by running the Gradle test task.
-- Do not stop with unverified build changes if tests can reasonably be run.
-
-## Tooling rules
-
-- Use Gradle as the primary local entrypoint for build/test scripts.
-- Keep module versioning in module-local `gradle.properties`.
+- Prefer headless or non-interactive checks. Run test apps in the background and launch helpers hidden. If Minecraft rendering or export needs OpenGL and a window, use a small isolated instance at the lowest practical resolution and keep it in the background if supported. Warn the user before taking foreground focus or taking over the desktop.
+- Close task-owned temporary sessions. Preserve user sessions and shared preview servers. Report failures that leave a process or resource behind.
+- Use the ignored `.local-artifacts/` directory for local logs, captures and verification reports. Keep one stable location for each recurring workflow's latest successful build, export or dataset. Temporary staging is fine during a run. Verify the replacement before removing the previous output and clean up staging and disposable logs or captures.
+- Keep the last good output and at most one compact failure bundle. Remove the bundle after a successful rerun. Preserve active runs, user data, diagnostic evidence, and release or rollback material. The [WebCraft requirements](modules/webcraft/AGENTS.md#exports) cover export retention per pack configuration.
 
 ## Commit format
-
-Every git commit must follow:
 
 ```text
 <type>: <short description>
@@ -64,20 +30,14 @@ Every git commit must follow:
 <explanation of what changed and why>
 ```
 
-Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
-
-- Keep both parts in English.
-- Keep the description concise and specific.
-- Do not add `Co-Authored-By` trailers to commits.
+Use `feat`, `fix`, `refactor`, `chore`, `docs` or `test`. Keep the subject concise and specific. Omit `Co-Authored-By` trailers.
 
 ## Git remotes
 
-- Routine pushes to a verified Universium remote are allowed after reviewing the branch and commits being pushed. Use normal fast-forward pushes and preserve remote history.
-- Get explicit authorization before publishing a release, deploying, or manually dispatching hosted CI.
+See the [Git policy](AGENTS.md#git-and-scope). Review the workflow triggers for the branch or tag before a push.
 
-## When extending the project
+## Hosted workflows
 
-- Start with the smallest useful implementation.
-- Preserve existing naming and folder structure unless there is a strong reason to change it.
-- Add tests before or alongside behavior changes.
-- If a change affects the public API, update docs and sample layout notes.
+- [Test](.github/workflows/test.yml) checks Gradle projects, the frontend bundle and frontend tests for pull requests. [PR changelog](.github/workflows/pr-changelog.yml) posts a changelog preview.
+- [Deploy](.github/workflows/deploy.yml) watches WebCraft module version changes on `main` and supports manual dispatch. The workflow defines the deployment targets and project selection.
+- [Frontend release](.github/workflows/release.yml) bundles and publishes static frontend assets on version tags.

@@ -16,6 +16,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.slf4j.Logger;
 
 import java.nio.file.Files;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 final class AutomaticPreviewExport {
@@ -24,6 +25,7 @@ final class AutomaticPreviewExport {
     private static final int WARMUP_TICKS = 300;
     private static final long STARTUP_TIMEOUT = TimeUnit.MINUTES.toNanos(15);
     private final ExportSettings settings;
+    private final CompletableFuture<?> launcherExit;
     private final long launched = System.nanoTime();
     private final boolean includeHidden = Boolean.getBoolean("webcraft.export.includeHidden");
     private final StaticPreviewWriter.Format format = Boolean.getBoolean("webcraft.export.png")
@@ -35,6 +37,10 @@ final class AutomaticPreviewExport {
 
     AutomaticPreviewExport(ExportSettings settings) {
         this.settings = settings;
+        launcherExit = Boolean.getBoolean("webcraft.export.watchLauncher")
+                ? ProcessHandle.current().parent().map(ProcessHandle::onExit)
+                        .orElseGet(() -> CompletableFuture.completedFuture(null))
+                : null;
     }
 
     void tick(ClientTickEvent.Post event) {
@@ -42,6 +48,10 @@ final class AutomaticPreviewExport {
         var client = Minecraft.getInstance();
         if (Files.isRegularFile(client.gameDirectory.toPath().resolve("cancel-export"))) {
             stop(client, "WebCraft automatic export cancelled");
+            return;
+        }
+        if (launcherExit != null && launcherExit.isDone()) {
+            stop(client, "WebCraft automatic export cancelled because its launcher exited");
             return;
         }
         if (!exportStarted && System.nanoTime() - launched >= STARTUP_TIMEOUT) {
@@ -65,7 +75,12 @@ final class AutomaticPreviewExport {
                         success ? "WebCraft automatic export completed" : "WebCraft automatic export did not complete"));
                 LOGGER.info("Starting WebCraft automatic catalog export");
                 client.setScreen(screen);
-                screen.startAutomatic(format, includeHidden, sections);
+                String boostOverride = System.getProperty("webcraft.export.backgroundBoost");
+                boolean boost = boostOverride == null ? settings.experimentalBackgroundBoost()
+                        : Boolean.parseBoolean(boostOverride);
+                String atlasOverride = System.getProperty("webcraft.export.previewAtlas");
+                boolean atlas = atlasOverride == null ? settings.previewAtlas() : Boolean.parseBoolean(atlasOverride);
+                screen.startAutomatic(format, includeHidden, sections, boost, atlas);
             }
         } catch (RuntimeException exception) {
             LOGGER.error("Could not start the WebCraft automatic export", exception);
@@ -90,6 +105,10 @@ final class AutomaticPreviewExport {
         if (stopping) return;
         stopping = true;
         LOGGER.info(message);
-        client.stop();
+        try {
+            if (client.screen instanceof PreviewExportScreen screen) screen.cancelAutomatic();
+        } finally {
+            client.stop();
+        }
     }
 }

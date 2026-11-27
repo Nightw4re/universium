@@ -88,8 +88,10 @@ final class AdvancementsRouteTest {
             assertEquals("no-store", response.headers().firstValue("Cache-Control").orElseThrow());
             assertEquals(JsonParser.parseString("""
                     {"total":2,"advancements":[
-                      {"id":"demo:a_task","title":"Task","description":"Task description","frame":"task"},
-                      {"id":"demo:z_goal","title":"Goal","description":"Goal description","frame":"goal"}]}
+                      {"id":"demo:a_task","title":"Task","description":"Task description","frame":"task",
+                       "group":"demo:a_task","groupTitle":"Task","x":0,"y":0},
+                      {"id":"demo:z_goal","title":"Goal","description":"Goal description","frame":"goal",
+                       "group":"demo:a_task","groupTitle":"Task","x":2,"y":0.25,"parentId":"demo:a_task"}]}
                     """), JsonParser.parseString(response.body()));
             assertEquals(404, http(client, server, "GET", feed.path() + "?player=Someone", TOKEN).statusCode());
             String spec = http(client, server, "GET", ApiDocumentation.SPEC_PATH, null).body();
@@ -120,6 +122,9 @@ final class AdvancementsRouteTest {
         assertEquals(2, body.get("total").getAsInt());
         assertEquals(1, body.get("completed").getAsInt());
         assertEquals(JsonParser.parseString("[\"demo:a_task\"]"), body.get("completedIds"));
+        var compact = route.readPublic("player=TeStPlAyEr&view=progress").body().getAsJsonObject();
+        assertEquals(Set.of("total", "player", "completed", "completedIds", "completedAt"), compact.keySet());
+        org.junit.jupiter.api.Assertions.assertTrue(compact.getAsJsonObject("completedAt").get("demo:a_task").getAsLong() > 0);
         assertEquals(progress, Files.readString(selectedFile));
     }
 
@@ -170,9 +175,10 @@ final class AdvancementsRouteTest {
         var otherRequirements = AdvancementRequirements.allOf(List.of("always"));
         var taskDisplay = display("Task", AdvancementType.TASK, false);
         var goalDisplay = display("Goal", AdvancementType.GOAL, false);
+        goalDisplay.setLocation(2, 0.25f);
         tree.addAll(List.of(
-                advancement(GOAL, goalDisplay, otherRequirements),
-                advancement(SECRET, display("Secret", AdvancementType.CHALLENGE, true), otherRequirements),
+                advancement(GOAL, goalDisplay, otherRequirements, SECRET),
+                advancement(SECRET, display("Secret", AdvancementType.CHALLENGE, true), otherRequirements, TASK),
                 advancement(ResourceLocation.parse("demo:recipes/wood"), taskDisplay, otherRequirements),
                 advancement(ResourceLocation.parse("demo:no_display"), null, otherRequirements),
                 advancement(TASK, taskDisplay, taskRequirements)));
@@ -185,7 +191,12 @@ final class AdvancementsRouteTest {
     }
 
     private static AdvancementHolder advancement(ResourceLocation id, DisplayInfo display, AdvancementRequirements requirements) {
-        return new AdvancementHolder(id, new Advancement(Optional.empty(), Optional.ofNullable(display),
+        return advancement(id, display, requirements, null);
+    }
+
+    private static AdvancementHolder advancement(ResourceLocation id, DisplayInfo display, AdvancementRequirements requirements,
+                                                 ResourceLocation parent) {
+        return new AdvancementHolder(id, new Advancement(Optional.ofNullable(parent), Optional.ofNullable(display),
                 AdvancementRewards.EMPTY, Map.of(), requirements, false));
     }
 

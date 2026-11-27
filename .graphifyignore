@@ -1,0 +1,29 @@
+# Runtime data, local configuration and generated outputs.
+.git/
+.agents/
+.codex/
+.local-artifacts/
+.gradle/
+.aws/
+build/
+dist/
+out/
+bin/
+node_modules/
+__pycache__/
+graphify-out/
+run/
+runs/
+logs/
+saves/
+world/
+worlds/
+config/
+serverconfig/
+webcraft-assets/
+.env*
+*.log
+
+# Leftover local build trees with no project sources.
+webcraft-next/
+webcraft-proxy/

@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 final class PreviewExportScreen extends Screen {
     private static final long FRAME_BUDGET_NANOS = 12_000_000;
     private static final long AUTOMATIC_FRAME_BUDGET_NANOS = 24_000_000;
+    private static final long BOOSTED_FRAME_BUDGET_NANOS = 72_000_000;
     private static final long PROGRESS_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(15);
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int BUTTON_WIDTH = 240;
@@ -34,7 +35,9 @@ final class PreviewExportScreen extends Screen {
     private final EnumSet<ExportSection> selectedSections;
     private final ArrayList<Checkbox> sectionControls = new ArrayList<>();
     private StaticPreviewWriter.Format staticFormat = StaticPreviewWriter.Format.WEBP;
+    private boolean previewAtlas;
     private Button format;
+    private Button atlas;
     private Button advanced;
     private Button inventory;
     private Button catalog;
@@ -62,13 +65,18 @@ final class PreviewExportScreen extends Screen {
         super(Component.literal("WebCraft Preview Exporter"));
         this.settings = settings;
         this.selectedSections = settings.sections();
+        this.previewAtlas = settings.previewAtlas();
         this.completion = completion;
     }
 
-    void startAutomatic(StaticPreviewWriter.Format format, boolean includeHidden, Set<ExportSection> sections) {
+    void startAutomatic(StaticPreviewWriter.Format format, boolean includeHidden, Set<ExportSection> sections, boolean boost,
+                        boolean previewAtlas) {
         staticFormat = format;
+        this.previewAtlas = previewAtlas;
         automatic = true;
-        frameBudgetNanos = AUTOMATIC_FRAME_BUDGET_NANOS;
+        frameBudgetNanos = boost ? BOOSTED_FRAME_BUDGET_NANOS : AUTOMATIC_FRAME_BUDGET_NANOS;
+        LOGGER.info("WebCraft automatic capture budget: {} ms per render batch",
+                TimeUnit.NANOSECONDS.toMillis(frameBudgetNanos));
         start(includeHidden ? Mode.FULL_CATALOG : Mode.VISIBLE_CATALOG, sections);
     }
 
@@ -79,8 +87,14 @@ final class PreviewExportScreen extends Screen {
                     staticFormat = staticFormat == StaticPreviewWriter.Format.WEBP
                             ? StaticPreviewWriter.Format.PNG : StaticPreviewWriter.Format.WEBP;
                     button.setMessage(formatLabel());
-                }).bounds(left, 0, BUTTON_WIDTH, 20)
+                    updateButtons();
+                }).bounds(left, 0, BUTTON_WIDTH / 2 - 2, 20)
                 .tooltip(Tooltip.create(Component.literal("Select the image format for previews and recipe sprites."))).build());
+        atlas = addRenderableWidget(Button.builder(atlasLabel(), button -> {
+                    previewAtlas = !previewAtlas;
+                    button.setMessage(atlasLabel());
+                }).bounds(left + BUTTON_WIDTH / 2 + 2, 0, BUTTON_WIDTH / 2 - 2, 20)
+                .tooltip(Tooltip.create(Component.literal("Pack static item previews into WebP sheets for this export."))).build());
         sectionControls.clear();
         for (ExportSection section : ExportSection.values()) {
             var checkbox = Checkbox.builder(Component.literal(section.label), font)
@@ -156,7 +170,8 @@ final class PreviewExportScreen extends Screen {
                 catalogItems = mode == Mode.FULL_CATALOG ? () -> CatalogExportItems.fullRegistry().iterator()
                         : () -> CatalogExportItems.visible(connection, registries).iterator();
             }
-            job = new PreviewExport(minecraft, stacks, catalogItems, output, staticFormat, sections, settings.ponderScenes());
+            job = new PreviewExport(minecraft, stacks, catalogItems, output, staticFormat, sections,
+                    settings.ponderScenes(), settings.ponderAtlasPageSize(), settings.experimentalCuda(), previewAtlas);
             exportStartedAt = System.nanoTime();
             timedPhase = null;
         } catch (IllegalArgumentException exception) {
@@ -192,9 +207,9 @@ final class PreviewExportScreen extends Screen {
             if (job.finished()) {
                 long finished = System.nanoTime();
                 logPhaseTiming(finished);
-                LOGGER.info("WebCraft export finished in {} ms, archive worker active for {} ms",
+                LOGGER.info("WebCraft export finished in {} ms, archive worker active for {} ms, {} unique icons exported directly from textures",
                         TimeUnit.NANOSECONDS.toMillis(finished - exportStartedAt),
-                        TimeUnit.NANOSECONDS.toMillis(job.archiveActiveNanos()));
+                        TimeUnit.NANOSECONDS.toMillis(job.archiveActiveNanos()), job.directIconsExported());
                 status = Component.literal(job.result());
                 endJob();
                 completion.accept(true);
@@ -263,11 +278,13 @@ final class PreviewExportScreen extends Screen {
         int step = progress.step();
         int count = progress.phases().size();
         graphics.drawCenteredString(font, "Step " + step + " of " + count, width / 2, top + 16, 0xFFFFFF);
-        if (!progress.detail().isEmpty()) {
-            graphics.drawCenteredString(font, progress.detail(), width / 2, top + 29, 0xE0E0E0);
-        }
         int left = (width - BUTTON_WIDTH) / 2;
-        int y = top + 46;
+        int y = top + 29;
+        for (var line : font.split(Component.literal(progress.detail()), Math.max(1, width - 16))) {
+            graphics.drawCenteredString(font, line, width / 2, y, 0xE0E0E0);
+            y += font.lineHeight;
+        }
+        y = Math.max(top + 46, y + 8);
         for (int index = 0; index < count; index++) {
             boolean current = index + 1 == step;
             String prefix = current ? "> " : "  ";
@@ -282,6 +299,10 @@ final class PreviewExportScreen extends Screen {
         boolean cancelled = job != null;
         endJob();
         if (cancelled) completion.accept(false);
+    }
+
+    void cancelAutomatic() {
+        if (automatic && job != null) endJob();
     }
 
     private void fail(Throwable exception) {
@@ -308,6 +329,9 @@ final class PreviewExportScreen extends Screen {
     private void updateButtons() {
         boolean ready = job == null;
         format.active = format.visible = ready;
+        atlas.visible = ready;
+        atlas.active = ready && staticFormat == StaticPreviewWriter.Format.WEBP;
+        atlas.setMessage(atlasLabel());
         catalog.visible = ready;
         catalog.active = ready && !selectedSections.isEmpty();
         advanced.active = advanced.visible = ready;
@@ -319,11 +343,18 @@ final class PreviewExportScreen extends Screen {
         int firstRow = contentTop() + (ready ? 36 : 139);
         int left = (width - BUTTON_WIDTH) / 2;
         format.setY(firstRow);
+        atlas.setY(firstRow);
+        var sections = ExportSection.values();
         for (int index = 0; index < sectionControls.size(); index++) {
             var checkbox = sectionControls.get(index);
             checkbox.visible = ready;
-            checkbox.active = ready && (index != ExportSection.PONDER.ordinal() || ModList.get().isLoaded("ponder")
-                    || selectedSections.contains(ExportSection.PONDER));
+            var section = sections[index];
+            boolean needsPonder = switch (section) {
+                case PONDER, PONDER_COMPACT, PONDER_DEFINITIONS -> true;
+                default -> false;
+            };
+            checkbox.active = ready && (!needsPonder || ModList.get().isLoaded("ponder")
+                    || selectedSections.contains(section));
             checkbox.setX(left + index % 2 * BUTTON_WIDTH / 2);
             checkbox.setY(firstRow + ROW_HEIGHT + index / 2 * CHECKBOX_ROW_HEIGHT);
         }
@@ -343,6 +374,11 @@ final class PreviewExportScreen extends Screen {
     private Component formatLabel() {
         return Component.literal(staticFormat == StaticPreviewWriter.Format.WEBP
                 ? "Preview format: WebP" : "Preview format: PNG");
+    }
+
+    private Component atlasLabel() {
+        return Component.literal("Preview atlas: "
+                + (staticFormat == StaticPreviewWriter.Format.WEBP && previewAtlas ? "On" : "Off"));
     }
 
     private enum Mode { INVENTORY, VISIBLE_CATALOG, FULL_CATALOG }

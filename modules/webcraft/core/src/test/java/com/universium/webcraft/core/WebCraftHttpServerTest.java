@@ -32,6 +32,7 @@ final class WebCraftHttpServerTest {
     private static final ResourceLocation MODULE = ResourceLocation.parse("webcraft_equipment:equipment");
     private static final String DISCOVERY = "/api/v1/modules";
     private static final String LOADOUT = DISCOVERY + "/webcraft_equipment/equipment/loadout";
+    private static final String INVENTORY = DISCOVERY + "/webcraft_equipment/equipment/inventory";
     private static final UUID VIEWER = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String TOKEN = "T".repeat(43);
     private static final String PNG_ICON = "data:image/png;base64,iVBORw0K";
@@ -47,13 +48,15 @@ final class WebCraftHttpServerTest {
             result.addProperty("player", "TestViewer");
             return WebCraftReadRoute.Response.ok(result);
         };
-        try (var listener = listener(Map.of(MODULE, Map.of("loadout", route)), new WebCraftHttpServer.ViewerAccess(VIEWER, TOKEN));
+        try (var listener = listener(Map.of(MODULE, Map.of("loadout", route, "inventory", route)),
+                     new WebCraftHttpServer.ViewerAccess(VIEWER, TOKEN));
              var client = HttpClient.newHttpClient()) {
             var discovery = send(client, listener, DISCOVERY, "GET");
             assertEquals(200, discovery.statusCode());
             var module = parse(discovery).getAsJsonArray("modules").get(0).getAsJsonObject();
             assertEquals(MODULE.toString(), module.get("id").getAsString());
             assertEquals(LOADOUT, module.getAsJsonObject("routes").get("loadout").getAsString());
+            assertEquals(INVENTORY, module.getAsJsonObject("routes").get("inventory").getAsString());
 
             assertEquals(404, send(client, listener, LOADOUT + "/extra", "GET", TOKEN).statusCode());
             assertEquals(404, send(client, listener, LOADOUT.replace("loadout", "%6coadout"), "GET", TOKEN).statusCode());
@@ -64,13 +67,19 @@ final class WebCraftHttpServerTest {
             var anonymous = send(client, listener, LOADOUT, "GET");
             assertEquals(401, anonymous.statusCode());
             assertEquals("Bearer", anonymous.headers().firstValue("WWW-Authenticate").orElseThrow());
+            assertEquals(401, send(client, listener, INVENTORY, "GET").statusCode());
+            assertEquals(401, send(client, listener, INVENTORY, "GET", "W".repeat(43)).statusCode());
+            assertEquals(400, send(client, listener, INVENTORY + "?player=OtherPlayer", "GET", TOKEN).statusCode());
             assertEquals(0, calls.get());
 
             var authorized = send(client, listener, LOADOUT, "GET", TOKEN);
             assertEquals(200, authorized.statusCode());
             assertEquals("no-store", authorized.headers().firstValue("Cache-Control").orElseThrow());
             assertEquals("TestViewer", parse(authorized).get("player").getAsString());
-            assertEquals(1, calls.get());
+            var inventory = send(client, listener, INVENTORY, "GET", TOKEN);
+            assertEquals(200, inventory.statusCode());
+            assertEquals("no-store", inventory.headers().firstValue("Cache-Control").orElseThrow());
+            assertEquals(2, calls.get());
         }
     }
 

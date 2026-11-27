@@ -1,0 +1,10 @@
+{
+  "name": "universium",
+  "private": true,
+  "scripts": {
+    "export": "python -B modules/webcraft/exporter/launch-export.py",
+    "export:check": "python -B modules/webcraft/exporter/launch-export.py --dry-run",
+    "export:cancel": "python -B modules/webcraft/exporter/launch-export.py --cancel",
+    "graphify": "node tools/graphify.mjs"
+  }
+}

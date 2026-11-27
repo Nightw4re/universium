@@ -16,19 +16,25 @@ final class ServerInfoFeed {
     private static final long TICKS_PER_DAY = 24_000;
     private final ServerInfoRoute route;
     private final Fields fields;
+    private final SparkPerformance performance;
     private final ServerUptimeData uptime;
     private final Instant worldStart;
     private final String webpIcon;
+    private final long serverStartedAt;
     private final long startedAt = System.nanoTime();
     private long refreshAt = startedAt;
     private ServerStatus.Favicon icon;
     private String iconData;
 
-    ServerInfoFeed(ServerInfoRoute route, ServerInfoSettings settings, MinecraftServer server, Instant worldStart) {
+    ServerInfoFeed(ServerInfoRoute route, ServerInfoSettings settings, MinecraftServer server, Instant worldStart,
+                   long serverStartedAt) {
         this.route = route;
-        this.worldStart = settings.publishWorldAge.get() ? worldStart : null;
+        this.serverStartedAt = serverStartedAt;
+        boolean publishWorldAge = settings.publishWorldAge.get();
+        this.worldStart = publishWorldAge ? worldStart : null;
         fields = new Fields(settings.publishPlayersOnline.get(), settings.publishMotd.get(), settings.publishServerIcon.get(),
-                settings.publishUptime.get(), settings.publishWorldTime.get());
+                settings.publishUptime.get(), publishWorldAge, settings.publishWorldTime.get());
+        performance = settings.publishSparkMetrics.get() ? SparkPerformance.open(settings.sparkMetricsIntervalSeconds.get()) : null;
         uptime = settings.publishTotalUptime.get()
                 ? openUptime(server)
                 : null;
@@ -66,10 +72,13 @@ final class ServerInfoFeed {
             }
         }
         if (fields.uptime()) {
-            fieldsJson.addProperty("uptimeSeconds", TimeUnit.MILLISECONDS.toSeconds(sessionMillis));
+            fieldsJson.addProperty("uptimeSeconds", TimeUnit.NANOSECONDS.toSeconds(now - serverStartedAt));
         }
         if (uptime != null) {
             fieldsJson.addProperty("totalUptimeSeconds", TimeUnit.MILLISECONDS.toSeconds(uptime.checkpoint(sessionMillis)));
+        }
+        if (fields.worldAge()) {
+            fieldsJson.addProperty("worldGameTimeTicks", server.overworld().getGameTime());
         }
         if (worldStart != null) {
             long minutes = WorldAgeData.completedMinutes(worldStart, Instant.now());
@@ -78,6 +87,10 @@ final class ServerInfoFeed {
         }
         if (fields.worldTime()) {
             fieldsJson.addProperty("worldTimeTicks", Math.floorMod(server.overworld().getDayTime(), TICKS_PER_DAY));
+        }
+        if (performance != null) {
+            var sample = performance.sample(now);
+            if (sample != null) fieldsJson.add("performance", sample);
         }
         route.publish(fieldsJson, iconData, webpIcon);
     }
@@ -98,5 +111,6 @@ final class ServerInfoFeed {
         }
     }
 
-    private record Fields(boolean playersOnline, boolean motd, boolean icon, boolean uptime, boolean worldTime) {}
+    private record Fields(boolean playersOnline, boolean motd, boolean icon, boolean uptime, boolean worldAge,
+                          boolean worldTime) {}
 }

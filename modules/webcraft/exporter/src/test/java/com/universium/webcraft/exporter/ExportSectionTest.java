@@ -26,6 +26,13 @@ final class ExportSectionTest {
     }
 
     @Test
+    void ponderSelectsOneCompactExportAndLegacyFramesRequireTheirOwnId() {
+        assertEquals(EnumSet.of(ExportSection.PONDER_COMPACT), ExportSection.parse("ponder,ponder-compact"));
+        assertEquals("ponder", ExportSection.PONDER_COMPACT.id());
+        assertEquals(EnumSet.of(ExportSection.PONDER), ExportSection.parse("ponder-legacy"));
+    }
+
+    @Test
     void rejectsEmptyAndUnknownSelections() {
         assertThrows(IllegalArgumentException.class, () -> ExportSection.parse(""));
         assertThrows(IllegalArgumentException.class, () -> ExportSection.parse("recipes,unknown"));

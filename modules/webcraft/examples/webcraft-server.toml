@@ -14,6 +14,10 @@ websocketOrigins = []
 enabledModules = []
 apiDocsEnabled = false
 
+# Account linking requires a dedicated WEBCRAFT_ACCOUNT_LINK_TOKEN environment secret.
+accountLinksEnabled = false
+accountLinksAllowRemote = false
+
 # Per-feed selections accept INHERIT, HTTP, WEBSOCKET or BOTH.
 playerHistoryTransport = "INHERIT"
 onlinePlayersTransport = "INHERIT"

@@ -56,7 +56,7 @@ final class QuestText {
         return plain(TextComponentParser.parse(text, ignored -> Component.empty()), limit);
     }
 
-    private static String plain(Component component, int limit) {
+    static String plain(Component component, int limit) {
         var output = new StringBuilder();
         component.visit((style, text) -> {
             if (!style.isObfuscated()) {

@@ -30,6 +30,7 @@ public final class WebCraftPreviewPack {
     private static final byte[] PNG_HEADER = {(byte) 137, 80, 78, 71, 13, 10, 26, 10,
             0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 64, 0, 0, 0, 64};
     private final Path archive;
+    private final PreviewAtlasReader atlas = new PreviewAtlasReader();
 
     /** References an optional preview archive. */
     public WebCraftPreviewPack(Path archive) {
@@ -41,29 +42,13 @@ public final class WebCraftPreviewPack {
         return Files.isRegularFile(archive);
     }
 
-    /** Opens a read-only, Ponder-scoped view of this export. Close it after use. */
-    public WebCraftPonderArchive openPonder() throws IOException {
-        var zip = new ZipFile(archive.toFile());
-        try {
-            if (!hasSupportedFormat(zip)) throw new IOException("Unsupported preview archive format");
-            return new WebCraftPonderArchive(zip);
-        } catch (IOException | RuntimeException exception) {
-            try {
-                zip.close();
-            } catch (IOException closeFailure) {
-                exception.addSuppressed(closeFailure);
-            }
-            throw exception;
-        }
-    }
-
     /** Reads an exported icon, or returns null when the entry is unavailable or invalid. */
     public byte[] readIcon(String key) {
         Icon icon = readIconWithFormat(key);
         return icon == null ? null : icon.bytes();
     }
 
-    /** Reads a static icon and its media type, preferring lossless WebP over legacy PNG. */
+    /** Reads a standalone WebP or PNG, or recovers the indexed atlas tile as a PNG. */
     public Icon readIconWithFormat(String key) {
         if (key == null || !key.matches("[a-f0-9]{64}")) {
             return null;
@@ -72,17 +57,19 @@ public final class WebCraftPreviewPack {
         try (var zip = new ZipFile(archive.toFile())) {
             if (!hasSupportedFormat(zip)) return null;
             byte[] webp = readEntry(zip, name + ".webp", MAX_ICON_BYTES);
-            if (isLosslessWebpIcon(webp)) return new Icon(webp, "image/webp");
+            if (isLosslessWebp(webp, 64)) return new Icon(webp, "image/webp");
             byte[] png = readEntry(zip, name + ".png", MAX_ICON_BYTES);
-            return png != null && png.length >= PNG_HEADER.length
-                    && Arrays.equals(PNG_HEADER, 0, PNG_HEADER.length, png, 0, PNG_HEADER.length)
-                    ? new Icon(png, "image/png") : null;
+            if (png != null && png.length >= PNG_HEADER.length
+                    && Arrays.equals(PNG_HEADER, 0, PNG_HEADER.length, png, 0, PNG_HEADER.length)) {
+                return new Icon(png, "image/png");
+            }
+            return atlas.read(archive, zip, key);
         } catch (IOException exception) {
             return null;
         }
     }
 
-    private static boolean isLosslessWebpIcon(byte[] bytes) {
+    static boolean isLosslessWebp(byte[] bytes, int size) {
         if (bytes == null || bytes.length < 26) return false;
         var header = ByteBuffer.wrap(bytes);
         if (header.getInt(0) != 0x52494646 || header.getInt(8) != 0x57454250
@@ -95,7 +82,7 @@ public final class WebCraftPreviewPack {
         return header.getInt(4) == bytes.length - 8 && chunkSize > 5 && chunkSize <= bytes.length - 20
                 && chunkSize + (chunkSize & 1) == bytes.length - 20
                 // Two 14-bit dimensions minus one, followed by an alpha flag and three zero version bits.
-                && (dimensions & 0xefffffff) == (63 | (63 << 14));
+                && (dimensions & 0xefffffff) == ((size - 1) | ((size - 1) << 14));
     }
 
     /** The encoded bytes and media type of a preview. */

@@ -28,12 +28,18 @@ final class ExportArchive implements AutoCloseable {
     private final ArrayBlockingQueue<Task> queue = new ArrayBlockingQueue<>(CAPACITY);
     private final AtomicReference<State> state = new AtomicReference<>(State.OPEN);
     private final CompletableFuture<Boolean> completion = new CompletableFuture<>();
+    private final PreviewAtlasWriter atlas;
     private final ExecutorService encoders = Executors.newFixedThreadPool(
             Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2)),
             Thread.ofPlatform().daemon().name("WebCraft preview encoder-", 1).factory());
     private long activeNanos;
 
     ExportArchive(Path output) {
+        this(output, null);
+    }
+
+    ExportArchive(Path output, StaticPreviewWriter atlasCodec) {
+        atlas = atlasCodec == null ? null : new PreviewAtlasWriter(output.getParent(), atlasCodec);
         Thread.ofPlatform().daemon().name("WebCraft preview archive").start(() -> {
             try {
                 completion.complete(write(output));
@@ -51,6 +57,15 @@ final class ExportArchive implements AutoCloseable {
                 queue.clear();
             }
         });
+    }
+
+    Work preparePreview(StaticPreviewWriter previews, String key, PngPixels pixels, boolean mayAnimate) {
+        return atlas == null ? prepare(() -> previews.prepare(key, pixels))
+                : writer -> atlas.write(writer, key, pixels, mayAnimate);
+    }
+
+    void markAnimated(String key) {
+        if (atlas != null) atlas.markAnimated(key);
     }
 
     // Only the client thread submits work. Animation captures can reserve slots until their loop ends.
@@ -105,7 +120,8 @@ final class ExportArchive implements AutoCloseable {
         Files.createDirectories(output.getParent());
         Path temporary = Files.createTempFile(output.getParent(), "previews-", ".tmp");
         try {
-            try (var archive = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
+            try (var atlasResource = atlas;
+                 var archive = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
                 EntryWriter writer = (name, bytes) -> {
                     if (state.get() == State.CANCELLED) throw new Cancelled();
                     var entry = new ZipEntry(name);
@@ -128,6 +144,7 @@ final class ExportArchive implements AutoCloseable {
                     long started = System.nanoTime();
                     task.work().write(bundles::write);
                     if (task.last()) {
+                        if (atlasResource != null) atlasResource.finish(writer);
                         bundles.finish();
                     }
                     activeNanos += System.nanoTime() - started;

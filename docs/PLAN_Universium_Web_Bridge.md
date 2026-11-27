@@ -1,6 +1,6 @@
 # Universium Web Bridge - Development Plan
 
-Historical development plan. See the [WebCraft guide](../modules/webcraft/README.md) for the current implementation.
+Historical, superseded milestone plan. See the [WebCraft index](../modules/webcraft/README.md) for the current implementation.
 
 This document describes the planned implementation path for **Universium Web Bridge**, a universal web infrastructure mod for NeoForge Minecraft servers.
 

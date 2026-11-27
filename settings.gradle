@@ -10,7 +10,8 @@ pluginManagement {
 
 rootProject.name = "universium"
 
-["core", "equipment", "catalog", "designs", "quests", "ponder"].each { module ->
+
+["core", "equipment", "catalog", "designs", "quests"].each { module ->
     include("webcraft-${module}")
     project(":webcraft-${module}").projectDir = file("modules/webcraft/${module}")
 }

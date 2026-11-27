@@ -86,6 +86,7 @@ form.addEventListener("submit", async event => {
       unauthorized: "This token was rejected.",
       viewer_access_disabled: "Viewer access is disabled on this server.",
       player_offline: "Your character is offline. Join the server and try again.",
+      inventory_unavailable: "Your saved equipment could not be loaded.",
       server_busy: "The Minecraft server is busy. Try again shortly.",
       equipment_disabled: "The equipment module is disabled on this server.",
     };

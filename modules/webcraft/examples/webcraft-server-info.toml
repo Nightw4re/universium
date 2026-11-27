@@ -23,11 +23,15 @@ publishUptime = false
 # Cumulative uptime excludes offline time and is checkpointed about every 10 seconds and on a clean stop.
 publishTotalUptime = false
 # Publishes world age in whole minutes and completed 24-hour periods, including offline time.
+# Publish accumulated Minecraft game ticks and, when the start is known, calendar age.
 publishWorldAge = false
 # To supply or correct the start of an existing world, set a verified UTC timestamp such as "2025-04-07T09:00:00Z".
 # Set it only in this world's serverconfig/webcraft-server-info.toml. Leave blank if the date is unknown.
 worldStartTimestamp = ""
 publishWorldTime = false
+# Adds one-minute TPS, mean MSPT and p95 MSPT when Spark is installed.
+publishSparkMetrics = false
+sparkMetricsIntervalSeconds = 15
 
 [modpack]
 publishName = false

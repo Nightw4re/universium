@@ -84,7 +84,15 @@ final class WebCraftHttpServer implements AutoCloseable {
                        Map<ResourceLocation, Map<String, WebCraftReadRoute>> modules, ViewerAccess access,
                        List<Feed> feeds, BearerToken feedToken, boolean docsEnabled,
                        ApiTransport.Policy transports, List<? extends String> browserOrigins) throws IOException {
-        routes = new WebCraftRoutes(server, modules, access, feeds, feedToken, transports);
+        this(address, server, modules, access, feeds, feedToken, docsEnabled, transports, browserOrigins, null);
+    }
+
+    WebCraftHttpServer(InetSocketAddress address, MinecraftServer server,
+                       Map<ResourceLocation, Map<String, WebCraftReadRoute>> modules, ViewerAccess access,
+                       List<Feed> feeds, BearerToken feedToken, boolean docsEnabled,
+                       ApiTransport.Policy transports, List<? extends String> browserOrigins,
+                       AccountLinkRoute accountLinkRoute) throws IOException {
+        routes = new WebCraftRoutes(server, modules, access, feeds, feedToken, transports, accountLinkRoute);
         docs = docsEnabled ? ApiDocumentation.load(routes.documentedRoutes()) : Map.of();
         origins = new WebCraftOrigins(browserOrigins);
         publicSocket = routes.supportsSocket(Scope.PUBLIC_SOCKET);
@@ -158,7 +166,9 @@ final class WebCraftHttpServer implements AutoCloseable {
                 return;
             }
             var request = new WebCraftRoutes.Request(target, method, peer(context).getAddress(),
-                    incoming.headers().getAll(HttpHeaderNames.AUTHORIZATION), Scope.HTTP);
+                    incoming.headers().getAll(HttpHeaderNames.AUTHORIZATION), Scope.HTTP,
+                    ("PUT".equals(method) || "POST".equals(method) && AccountLinkRoute.PATH.equals(path))
+                            ? incoming.content().toString(StandardCharsets.UTF_8) : null);
             pending.add(new HttpCall(request, HttpUtil.isKeepAlive(incoming)));
             processNext(context);
         }

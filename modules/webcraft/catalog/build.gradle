@@ -8,9 +8,7 @@ def neoForgeVersion = coreProject.property("neoVersion")
 
 dependencies {
     implementation coreProject
-    def webpDecoder = "org.glavo:webp:0.2.0"
-    jarJar(implementation(webpDecoder))
-    additionalRuntimeClasspath(webpDecoder)
+    compileOnly "org.glavo:webp:0.2.0"
 }
 
 testing {

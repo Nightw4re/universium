@@ -20,6 +20,8 @@ final class ServerInfoSettings {
     final ModConfigSpec.BooleanValue publishWorldAge;
     final ModConfigSpec.ConfigValue<String> worldStartTimestamp;
     final ModConfigSpec.BooleanValue publishWorldTime;
+    final ModConfigSpec.BooleanValue publishSparkMetrics;
+    final ModConfigSpec.IntValue sparkMetricsIntervalSeconds;
     final ModConfigSpec.BooleanValue publishModpackName;
     final ModConfigSpec.BooleanValue publishModpackVersion;
     final ModConfigSpec.EnumValue<ModpackMetadata.Source> modpackSource;
@@ -48,13 +50,18 @@ final class ServerInfoSettings {
         publishTotalUptime = builder.comment("Track and publish cumulative uptime for this world while enabled.",
                         "Checkpoints are written about every 10 seconds and on a clean stop.")
                 .define("publishTotalUptime", false);
-        publishWorldAge = builder.comment("Publish world age in whole minutes and completed 24-hour periods, including offline time.")
+        publishWorldAge = builder.comment("Publish the world's accumulated Minecraft game ticks.",
+                        "Also publish calendar age, including offline time, when the world start is known.")
                 .define("publishWorldAge", false);
         worldStartTimestamp = builder.comment("Verified ISO-8601 start timestamp to supply or correct the start of an existing world.",
                         "Set this only in this world's serverconfig/webcraft-server-info.toml. Leave blank when unknown.")
                 .define("worldStartTimestamp", "");
         publishWorldTime = builder.comment("Publish the current time of day in the Overworld as a tick from 0 to 23999.")
                 .define("publishWorldTime", false);
+        publishSparkMetrics = builder.comment("Publish one-minute TPS and MSPT from Spark when installed.")
+                .define("publishSparkMetrics", false);
+        sparkMetricsIntervalSeconds = builder.comment("Seconds between Spark samples while publishing is enabled.")
+                .defineInRange("sparkMetricsIntervalSeconds", 15, 5, 300);
         builder.push("modpack");
         publishModpackName = builder.define("publishName", false);
         publishModpackVersion = builder.define("publishVersion", false);

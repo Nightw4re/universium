@@ -22,6 +22,9 @@ dependencies {
     def nettyHttp = "io.netty:netty-codec-http:4.1.97.Final"
     jarJar(implementation(nettyHttp))
     additionalRuntimeClasspath(nettyHttp) { transitive = false }
+    def webpDecoder = "org.glavo:webp:0.2.0"
+    jarJar(implementation(webpDecoder))
+    additionalRuntimeClasspath(webpDecoder)
 }
 
 testing {

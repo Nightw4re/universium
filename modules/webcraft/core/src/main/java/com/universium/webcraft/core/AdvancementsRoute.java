@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 final class AdvancementsRoute implements WebCraftReadRoute.PublicRoute {
     static final String PATH = "/api/v1/advancements";
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final Pattern PLAYER_QUERY = Pattern.compile("player=([A-Za-z0-9_]{3,16})");
+    private static final Pattern PLAYER_QUERY = Pattern.compile("player=([A-Za-z0-9_]{3,16})(&view=progress)?");
     private final Executor gameThread;
     private final Function<String, AdvancementSnapshots.Snapshot> capture;
     private final SavedAdvancements saves;
@@ -33,10 +33,12 @@ final class AdvancementsRoute implements WebCraftReadRoute.PublicRoute {
     @Override
     public Response readPublic(String rawQuery) {
         String name = null;
+        boolean progressOnly = false;
         if (rawQuery != null) {
             var match = PLAYER_QUERY.matcher(rawQuery);
             if (!match.matches()) return Response.error(400, "invalid_query");
             name = match.group(1);
+            progressOnly = match.group(2) != null;
         }
 
         String requested = name;
@@ -58,9 +60,11 @@ final class AdvancementsRoute implements WebCraftReadRoute.PublicRoute {
         if (snapshot == null) return Response.error(404, "player_not_found");
 
         var completed = snapshot.completed();
+        var dates = snapshot.dates();
         if (completed == null) {
             try {
-                completed = saves.completed(snapshot.player().uuid(), snapshot.catalog());
+                dates = saves.completed(snapshot.player().uuid(), snapshot.catalog());
+                completed = dates.keySet();
             } catch (IOException exception) {
                 LOGGER.debug("Could not read saved advancement progress", exception);
                 return Response.error(503, "advancement_progress_unavailable");
@@ -69,23 +73,36 @@ final class AdvancementsRoute implements WebCraftReadRoute.PublicRoute {
 
         var advancements = new JsonArray();
         var completedIds = new JsonArray();
+        var completedAt = new JsonObject();
         for (var entry : snapshot.catalog()) {
             String id = entry.id().toString();
+            if (completed.contains(entry.id())) {
+                completedIds.add(id);
+                var timestamp = dates.get(entry.id());
+                if (timestamp != null) completedAt.addProperty(id, timestamp);
+            }
+            if (progressOnly) continue;
             var row = new JsonObject();
             row.addProperty("id", id);
             row.addProperty("title", entry.title());
             row.addProperty("description", entry.description());
             row.addProperty("frame", entry.frame());
+            row.addProperty("group", entry.group().toString());
+            row.addProperty("groupTitle", entry.groupTitle());
+            if (entry.iconItemId() != null) row.addProperty("iconItemId", entry.iconItemId().toString());
+            row.addProperty("x", entry.x());
+            row.addProperty("y", entry.y());
+            if (entry.parentId() != null) row.addProperty("parentId", entry.parentId().toString());
             advancements.add(row);
-            if (completed.contains(entry.id())) completedIds.add(id);
         }
         var body = new JsonObject();
-        body.addProperty("total", advancements.size());
-        body.add("advancements", advancements);
+        body.addProperty("total", snapshot.catalog().size());
+        if (!progressOnly) body.add("advancements", advancements);
         if (snapshot.player() != null) {
             body.addProperty("player", snapshot.player().name());
             body.addProperty("completed", completedIds.size());
             body.add("completedIds", completedIds);
+            if (progressOnly && completedAt.size() > 0) body.add("completedAt", completedAt);
         }
         return Response.ok(body);
     }

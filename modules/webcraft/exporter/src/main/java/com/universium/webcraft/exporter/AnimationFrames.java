@@ -10,10 +10,15 @@ final class AnimationFrames {
     void addTick(PngPixels pixels) {
         var last = frames.isEmpty() ? null : frames.getLast();
         if (last != null && Arrays.equals(last.pixels().rgba(), pixels.rgba())) {
-            frames.set(frames.size() - 1, new Frame(last.pixels(), last.ticks() + 1));
+            repeatTick();
         } else {
             frames.add(new Frame(pixels, 1));
         }
+    }
+
+    void repeatTick() {
+        var last = frames.getLast();
+        frames.set(frames.size() - 1, new Frame(last.pixels(), last.ticks() + 1));
     }
 
     List<Frame> frames() {

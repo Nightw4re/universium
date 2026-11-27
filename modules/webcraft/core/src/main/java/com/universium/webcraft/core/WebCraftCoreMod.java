@@ -4,9 +4,15 @@ import com.google.gson.JsonArray;
 import com.mojang.logging.LogUtils;
 import com.universium.webcraft.api.RegisterWebCraftModulesEvent;
 import com.universium.webcraft.api.WebCraftReadRoute;
+import com.universium.webcraft.api.WebCraftReloadEvent;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -17,6 +23,7 @@ import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -49,6 +56,7 @@ public final class WebCraftCoreMod {
     private final PlayerListRoute playerRosterRoute = new PlayerListRoute();
     private Map<ResourceLocation, Map<String, WebCraftReadRoute>> registeredModules = Map.of();
     private WebCraftHttpServer listener;
+    private AccountLinks accountLinks;
     private ServerStatusRoute serverStatus;
     private ServerInfoRoute serverInfoRoute;
     private ServerInfoFeed serverInfo;
@@ -57,6 +65,7 @@ public final class WebCraftCoreMod {
     private PlayerRoster playerRoster;
     private ModConfig serverInfoConfig;
     private Instant worldStart;
+    private long serverStartedAt;
 
     public WebCraftCoreMod(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.SERVER, settings.spec, "webcraft-server.toml");
@@ -70,6 +79,8 @@ public final class WebCraftCoreMod {
         NeoForge.EVENT_BUS.addListener(this::onStopped);
         NeoForge.EVENT_BUS.addListener(this::updateFeeds);
         NeoForge.EVENT_BUS.addListener(this::recordPlayerJoin);
+        NeoForge.EVENT_BUS.addListener(this::recordPlayerLogout);
+        NeoForge.EVENT_BUS.addListener(this::registerCommands);
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
@@ -98,15 +109,19 @@ public final class WebCraftCoreMod {
         if (!dedicated && !enabled) {
             return;
         }
+        rememberWorldStart(server);
+        if (enabled && statusSettings.enabled.get()) {
+            startListener(server, true);
+        }
+    }
+
+    private void rememberWorldStart(MinecraftServer server) {
         var world = server.getWorldPath(LevelResource.ROOT);
         try {
             worldStart = WorldAgeData.remember(world, server.getWorldData().overworldData().isInitialized(),
                     Instant.now(), configuredWorldStart(server));
         } catch (IOException exception) {
             LOGGER.warn("Could not remember the WebCraft world start for {}", world, exception);
-        }
-        if (enabled && statusSettings.enabled.get()) {
-            startListener(server, true);
         }
     }
 
@@ -118,7 +133,75 @@ public final class WebCraftCoreMod {
     }
 
     private void onStarted(ServerStartedEvent event) {
-        var server = event.getServer();
+        serverStartedAt = System.nanoTime();
+        initializeFeeds(event.getServer());
+    }
+
+    private void registerCommands(RegisterCommandsEvent event) {
+        event.getDispatcher().register(Commands.literal("webcraft")
+                .then(Commands.literal("reload").requires(source -> source.hasPermission(4))
+                        .executes(context -> reload(context.getSource())))
+                .then(Commands.literal("link").requires(source -> source.getEntity() instanceof ServerPlayer)
+                        .executes(context -> link(context.getSource().getPlayerOrException()))));
+    }
+
+    private int link(ServerPlayer player) {
+        if (accountLinks == null || !player.server.isReady()) {
+            player.sendSystemMessage(Component.literal("WebCraft account linking is unavailable."));
+            return 0;
+        }
+        String code = accountLinks.issue(player.getUUID(), player.getDisplayName().getString());
+        if (code == null) {
+            player.sendSystemMessage(Component.literal("WebCraft account linking is busy. Try again later."));
+            return 0;
+        }
+        player.sendSystemMessage(Component.literal("Your WebCraft link code (expires in "
+                        + AccountLinks.CODE_LIFETIME.toMinutes() + " minutes): ")
+                .append(Component.literal(code).withStyle(style -> style.withClickEvent(
+                        new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, code))))
+                .append(Component.literal(". Click the code to copy it. Enter it only on your server's account-linking page.")));
+        return 1;
+    }
+
+    private int reload(CommandSourceStack source) {
+        var server = source.getServer();
+        closeListener();
+        if (serverInfo != null) {
+            serverInfo.stop();
+        }
+        clearFeeds();
+        boolean refreshed = true;
+        try {
+            NeoForge.EVENT_BUS.post(new WebCraftReloadEvent(server));
+        } catch (RuntimeException exception) {
+            LOGGER.error("A WebCraft add-on failed to reload", exception);
+            refreshed = false;
+        }
+        try {
+            if (server.isDedicatedServer() || settings.listenerEnabled(false)) {
+                rememberWorldStart(server);
+            }
+            initializeFeeds(server);
+        } catch (RuntimeException exception) {
+            LOGGER.error("WebCraft reload failed", exception);
+            source.sendFailure(Component.literal("WebCraft reload failed. See the server log."));
+            return 0;
+        }
+        if (listener == null && settings.listenerEnabled(server.isDedicatedServer())) {
+            source.sendFailure(Component.literal("WebCraft could not reopen its API listener. See the server log."));
+            return 0;
+        }
+        if (!refreshed) {
+            source.sendFailure(Component.literal("A WebCraft add-on failed to reload. See the server log."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(listener == null
+                ? "WebCraft reloaded. The API listener is disabled."
+                : "WebCraft reloaded. The API listener is active."), false);
+        return 1;
+    }
+
+    private void initializeFeeds(MinecraftServer server) {
         boolean dedicated = server.isDedicatedServer();
         boolean enabled = settings.listenerEnabled(dedicated);
         if (!dedicated && !enabled) {
@@ -148,6 +231,9 @@ public final class WebCraftCoreMod {
             startListener(server, false);
         } else if (serverInfoRoute != null) {
             serverInfo = initializeServerInfo(server, serverInfoRoute);
+        }
+        if (serverStatus != null && server.isReady()) {
+            serverStatus.markReady();
         }
     }
 
@@ -215,6 +301,10 @@ public final class WebCraftCoreMod {
             feeds.add(new WebCraftHttpServer.Feed(PlayerListRoute.ROSTER_PATH, FeedExposure.INTERNAL, playerRosterRoute,
                     settings.playerRosterLoopbackOnly.get(), settings.playerRosterTransport.get()));
         }
+        if (settings.playerPrivacyEnabled.get()) {
+            var privacy = new PlayerPrivacyRoute(server.getWorldPath(LevelResource.ROOT).resolve("webcraft-privacy"));
+            feeds.add(new WebCraftHttpServer.Feed(PlayerPrivacyRoute.PATH, FeedExposure.INTERNAL, privacy, true, ApiTransport.HTTP));
+        }
         if (settings.advancementsEnabled.get()) {
             var capture = new AdvancementSnapshots(server, () -> playerRoster);
             var saves = new SavedAdvancements(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR), server.getFixerUpper());
@@ -236,14 +326,28 @@ public final class WebCraftCoreMod {
             var infoFeed = info != null && !starting ? initializeServerInfo(server, info) : null;
             var address = new InetSocketAddress(settings.listenerHost(server.isDedicatedServer()), settings.port.get());
             var policy = ApiTransport.Policy.from(settings.apiTransport.get(), settings.routeTransports.get());
+            var linkRoute = createAccountLinkRoute(server);
             listener = new WebCraftHttpServer(address, server, active, access, feeds, feedToken, settings.apiDocsEnabled.get(),
-                    policy, settings.websocketOrigins.get());
+                    policy, settings.websocketOrigins.get(), linkRoute);
+            accountLinks = linkRoute == null ? null : linkRoute.links();
             serverStatus = status;
             serverInfoRoute = info;
             serverInfo = infoFeed;
             LOGGER.info("WebCraft API is listening on {}", listener.address());
         } catch (IOException | IllegalArgumentException exception) {
             LOGGER.error("WebCraft could not start its API listener", exception);
+        }
+    }
+
+    private AccountLinkRoute createAccountLinkRoute(MinecraftServer server) {
+        if (!server.isDedicatedServer() || !settings.accountLinksEnabled.get()) return null;
+        try {
+            var token = new WebCraftHttpServer.BearerToken(System.getenv(AccountLinkRoute.TOKEN_VARIABLE),
+                    AccountLinkRoute.TOKEN_VARIABLE);
+            return new AccountLinkRoute(new AccountLinks(), token, settings.accountLinksAllowRemote.get());
+        } catch (IllegalArgumentException exception) {
+            LOGGER.warn("WebCraft account linking is disabled. {}", exception.getMessage());
+            return null;
         }
     }
 
@@ -257,7 +361,7 @@ public final class WebCraftCoreMod {
             pack = new ModpackMetadata(FMLPaths.GAMEDIR.get(), ModpackMetadata::readRunningBcc).resolve(selection);
         }
         route.initializeModpack(pack, publishName, publishVersion);
-        return new ServerInfoFeed(route, infoSettings, server, worldStart);
+        return new ServerInfoFeed(route, infoSettings, server, worldStart, serverStartedAt);
     }
 
     private void updateFeeds(ServerTickEvent.Post event) {
@@ -298,22 +402,34 @@ public final class WebCraftCoreMod {
         }
     }
 
+    private void recordPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (playerRoster != null && settings.playerRosterEnabled.get() && event.getEntity() instanceof ServerPlayer player) {
+            playerRoster.recordPlayTime(player.getUUID(), player.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME)));
+            playerRosterRoute.publish(playerRoster.snapshot());
+        }
+    }
+
     private void onStopped(ServerStoppedEvent event) {
         closeListener();
+        clearFeeds();
+        serverInfoConfig = null;
+        worldStart = null;
+    }
+
+    private void clearFeeds() {
         serverInfoRoute = null;
         serverStatus = null;
         serverInfo = null;
         playerHistory = null;
         onlinePlayers = null;
         playerRoster = null;
-        serverInfoConfig = null;
-        worldStart = null;
         playerHistoryRoute.publish(List.of());
         onlinePlayersRoute.publish(new JsonArray());
         playerRosterRoute.publish(new JsonArray());
     }
 
     private void closeListener() {
+        accountLinks = null;
         if (listener != null) {
             listener.close();
             listener = null;

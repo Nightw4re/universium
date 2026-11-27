@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -23,13 +24,19 @@ import java.util.UUID;
 final class PlayerRoster {
     private static final Logger LOGGER = LogUtils.getLogger();
     private final Map<UUID, String> players = new TreeMap<>();
+    private final Map<UUID, Integer> playTimeMinutes = new HashMap<>();
 
     PlayerRoster(Path world, Path profileCache, List<PlayerHistoryData.Player> history) {
         var names = cachedNames(profileCache);
         scan(world.resolve("playerdata"), names, ".dat", ".dat_old");
-        scan(world.resolve("stats"), names, ".json");
+        var stats = world.resolve("stats");
+        scan(stats, names, ".json");
         scan(world.resolve("advancements"), names, ".json");
         history.forEach(player -> recordJoin(player.uuid(), player.name()));
+        players.keySet().forEach(uuid -> {
+            var minutes = readPlayTime(stats.resolve(uuid + ".json"));
+            if (minutes != null) playTimeMinutes.put(uuid, minutes);
+        });
     }
 
     void recordJoin(UUID uuid, String name) {
@@ -53,15 +60,37 @@ final class PlayerRoster {
 
     record NamedPlayer(UUID uuid, String name) {}
 
+    void recordPlayTime(UUID uuid, int ticks) {
+        playTimeMinutes.put(uuid, Math.max(0, ticks) / 1_200);
+    }
+
     JsonArray snapshot() {
         var array = new JsonArray();
         players.forEach((uuid, name) -> {
             var player = new JsonObject();
             player.addProperty("uuid", uuid.toString());
             player.addProperty("name", name);
+            if (playTimeMinutes.containsKey(uuid)) player.addProperty("playTimeMinutes", playTimeMinutes.get(uuid));
             array.add(player);
         });
         return array;
+    }
+
+    private static Integer readPlayTime(Path file) {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return null;
+        try (var reader = Files.newBufferedReader(file)) {
+            if (JsonParser.parseReader(reader) instanceof JsonObject root
+                    && root.get("stats") instanceof JsonObject stats
+                    && stats.get("minecraft:custom") instanceof JsonObject custom
+                    && custom.get("minecraft:play_time") instanceof JsonPrimitive ticks
+                    && ticks.isNumber()) {
+                int value = ticks.getAsBigDecimal().intValueExact();
+                return value >= 0 ? value / 1_200 : null;
+            }
+        } catch (IOException | JsonParseException | ArithmeticException | NumberFormatException exception) {
+            LOGGER.debug("Could not read play time from {}", file, exception);
+        }
+        return null;
     }
 
     private void scan(Path directory, Map<UUID, String> names, String... extensions) {

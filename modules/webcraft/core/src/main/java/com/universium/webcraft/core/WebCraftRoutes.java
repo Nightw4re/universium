@@ -25,7 +25,11 @@ final class WebCraftRoutes {
 
     enum Scope { HTTP, PUBLIC_SOCKET, RESTRICTED_SOCKET }
 
-    record Request(URI target, String method, InetAddress peer, List<String> authorization, Scope scope) {}
+    record Request(URI target, String method, InetAddress peer, List<String> authorization, Scope scope, String body) {
+        Request(URI target, String method, InetAddress peer, List<String> authorization, Scope scope) {
+            this(target, method, peer, authorization, scope, null);
+        }
+    }
 
     record Result(Response response, Map<String, String> headers, List<WebCraftChanges> signals) {
         Result(Response response) {
@@ -54,13 +58,21 @@ final class WebCraftRoutes {
     private final MinecraftServer server;
     private final WebCraftHttpServer.ViewerAccess access;
     private final WebCraftHttpServer.BearerToken feedToken;
+    private final AccountLinkRoute accountLinkRoute;
 
     WebCraftRoutes(MinecraftServer server, Map<ResourceLocation, Map<String, WebCraftReadRoute>> modules,
                    WebCraftHttpServer.ViewerAccess access, List<WebCraftHttpServer.Feed> feeds,
                    WebCraftHttpServer.BearerToken feedToken, ApiTransport.Policy policy) {
+        this(server, modules, access, feeds, feedToken, policy, null);
+    }
+
+    WebCraftRoutes(MinecraftServer server, Map<ResourceLocation, Map<String, WebCraftReadRoute>> modules,
+                   WebCraftHttpServer.ViewerAccess access, List<WebCraftHttpServer.Feed> feeds,
+                   WebCraftHttpServer.BearerToken feedToken, ApiTransport.Policy policy, AccountLinkRoute accountLinkRoute) {
         this.server = server;
         this.access = access;
         this.feedToken = feedToken;
+        this.accountLinkRoute = accountLinkRoute;
         var registered = new HashMap<String, Route>();
         var discovery = new JsonArray();
         var websocketOnly = new JsonArray();
@@ -94,7 +106,8 @@ final class WebCraftRoutes {
 
         ServerStatusRoute status = null;
         for (var feed : feeds) {
-            registered.put(feed.path(), new Route(feed.handler(), feed, policy.resolve(feed.path(), feed.transport())));
+            var transport = feed.handler() instanceof PlayerPrivacyRoute ? ApiTransport.HTTP : policy.resolve(feed.path(), feed.transport());
+            registered.put(feed.path(), new Route(feed.handler(), feed, transport));
             if (feed.handler() instanceof ServerStatusRoute route) status = route;
         }
         lifecycle = status;
@@ -127,6 +140,9 @@ final class WebCraftRoutes {
 
     Result dispatch(Request request, boolean subscribe) {
         try {
+            if (accountLinkRoute != null && AccountLinkRoute.PATH.equals(request.target.getRawPath())) {
+                return accountLinkRoute.handle(request, lifecycle);
+            }
             return read(request, subscribe);
         } catch (RuntimeException exception) {
             LOGGER.error("WebCraft API handler failed", exception);
@@ -140,8 +156,10 @@ final class WebCraftRoutes {
         if (route == null || (!http && route.restricted() != (request.scope == Scope.RESTRICTED_SOCKET))) {
             return new Result(Response.error(404, "not_found"));
         }
-        if (!"GET".equals(request.method)) {
-            return new Result(Response.error(405, "method_not_allowed"), Map.of("Allow", "GET"), List.of());
+        boolean privacy = route.handler instanceof PlayerPrivacyRoute;
+        boolean update = privacy && http && "PUT".equals(request.method);
+        if (!"GET".equals(request.method) && !update) {
+            return new Result(Response.error(405, "method_not_allowed"), Map.of("Allow", privacy ? "GET, PUT" : "GET"), List.of());
         }
         if (!route.permitsAddress(request.peer)) {
             return new Result(Response.error(403, "loopback_required"));
@@ -162,6 +180,9 @@ final class WebCraftRoutes {
             if (unavailable != null) return new Result(unavailable);
         }
         String query = request.target.getRawQuery();
+        if (update) {
+            return new Result(((PlayerPrivacyRoute) route.handler).update(query, request.body == null ? "" : request.body));
+        }
         if (route.handler instanceof WebCraftReadRoute.InternalRoute internal) {
             return new Result(subscribe ? Response.error(405, "subscriptions_unsupported") : internal.readInternal(server, query));
         }

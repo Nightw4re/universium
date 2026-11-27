@@ -40,7 +40,7 @@ final class ExportDiagnostics {
     }
 
     void write(ExportArchive.EntryWriter writer, Set<ExportSection> sections, boolean catalog, int catalogItems, boolean recipeViewerAvailable,
-               int skippedMachineRecipes) throws IOException {
+               int skippedMachineRecipes, JsonObject ponder) throws IOException {
         var report = new JsonObject();
         report.addProperty("version", 1);
         var selected = new JsonArray();
@@ -63,6 +63,7 @@ final class ExportDiagnostics {
             entries.add(entry);
         }
         report.add("missingImages", entries);
+        if (ponder != null) report.add("ponder", ponder);
         writer.write(FILE, report.toString().getBytes(StandardCharsets.UTF_8));
     }
 

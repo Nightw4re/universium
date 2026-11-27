@@ -166,7 +166,18 @@
           "totalUptimeSeconds": { "type": "integer", "format": "int64", "minimum": 0, "description": "Uptime accumulated for this world while tracking is enabled, including the current session." },
           "worldAgeDays": { "type": "integer", "format": "int64", "minimum": 0, "description": "Completed 24-hour periods since this world started, including offline time. Omitted when publication is disabled or the start is unknown." },
           "worldAgeMinutes": { "type": "integer", "format": "int64", "minimum": 0, "description": "Whole real minutes since this world started, including offline time. Present whenever worldAgeDays is present." },
+          "worldGameTimeTicks": { "type": "integer", "format": "int64", "minimum": 0, "description": "Accumulated Minecraft game ticks saved with the Overworld. Excludes offline time and is independent of the daylight clock. Omitted when publishWorldAge is disabled." },
           "worldTimeTicks": { "type": "integer", "minimum": 0, "maximum": 23999, "description": "Current Overworld time of day. Tick 0 is 06:00 and tick 6000 is noon." },
+          "performance": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Optional Spark measurements from the last minute. Unavailable measurements are omitted.",
+            "properties": {
+              "tps": { "type": "number", "minimum": 0, "description": "Ticks per second." },
+              "mspt": { "type": "number", "minimum": 0, "description": "Mean milliseconds per tick." },
+              "msptP95": { "type": "number", "minimum": 0, "description": "95th-percentile milliseconds per tick." }
+            }
+          },
           "modpack": {
             "type": "object",
             "properties": {

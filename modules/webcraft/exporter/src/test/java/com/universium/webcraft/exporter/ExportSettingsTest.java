@@ -16,6 +16,39 @@ final class ExportSettingsTest {
     }
 
     @Test
+    void enablesExperimentalCudaByDefaultAndKeepsAnExplicitOptOut() {
+        var config = CommentedConfig.inMemory();
+        var settings = new ExportSettings();
+        settings.spec.correct(config);
+        assertEquals(Boolean.TRUE, config.get("experimentalCuda"));
+        config.set("experimentalCuda", false);
+        settings.spec.correct(config);
+        assertEquals(Boolean.FALSE, config.get("experimentalCuda"));
+    }
+
+    @Test
+    void disablesTheBackgroundBoostByDefaultAndKeepsAnExplicitOptIn() {
+        var config = CommentedConfig.inMemory();
+        var settings = new ExportSettings();
+        settings.spec.correct(config);
+        assertEquals(Boolean.FALSE, config.get("experimentalBackgroundBoost"));
+        config.set("experimentalBackgroundBoost", true);
+        settings.spec.correct(config);
+        assertEquals(Boolean.TRUE, config.get("experimentalBackgroundBoost"));
+    }
+
+    @Test
+    void disablesPreviewAtlasesByDefaultAndKeepsAnExplicitOptIn() {
+        var config = CommentedConfig.inMemory();
+        var settings = new ExportSettings();
+        settings.spec.correct(config);
+        assertEquals(Boolean.FALSE, config.get("previewAtlas"));
+        config.set("previewAtlas", true);
+        settings.spec.correct(config);
+        assertEquals(Boolean.TRUE, config.get("previewAtlas"));
+    }
+
+    @Test
     void acceptsAnExplicitRecipeOnlyOrEmptySelection() {
         var config = CommentedConfig.inMemory();
         var settings = new ExportSettings();
@@ -25,6 +58,16 @@ final class ExportSettingsTest {
         config.set("sections", List.of());
         settings.spec.correct(config);
         assertEquals(List.of(), config.get("sections"));
+    }
+
+    @Test
+    void preservesThePreviousCompactIdInExistingConfigs() {
+        var config = CommentedConfig.inMemory();
+        var settings = new ExportSettings();
+        var selected = List.of("items", "recipes", "tooltips", "designs", "ponder", "ponder-compact");
+        config.set("sections", selected);
+        settings.spec.correct(config);
+        assertEquals(selected, config.get("sections"));
     }
 
     @Test

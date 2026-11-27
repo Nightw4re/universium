@@ -8,6 +8,7 @@ out/
 *.log
 logs/
 /.local-artifacts/
+graphify-out/
 *.tsbuildinfo
 
 # WebCraft runtime and build artifacts

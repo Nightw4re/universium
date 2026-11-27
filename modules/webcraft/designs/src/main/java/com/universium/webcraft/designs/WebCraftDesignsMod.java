@@ -3,6 +3,7 @@ package com.universium.webcraft.designs;
 import com.universium.webcraft.api.RegisterWebCraftModulesEvent;
 import com.universium.webcraft.api.WebCraftPreviewPack;
 import com.universium.webcraft.api.WebCraftReadRoute;
+import com.universium.webcraft.api.WebCraftReloadEvent;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
@@ -24,7 +25,8 @@ public final class WebCraftDesignsMod {
 
     public WebCraftDesignsMod(IEventBus modBus) {
         modBus.addListener(this::register);
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, this::load);
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, (ServerStartedEvent event) -> load());
+        NeoForge.EVENT_BUS.addListener((WebCraftReloadEvent event) -> load());
     }
 
     private void register(RegisterWebCraftModulesEvent event) {
@@ -38,7 +40,7 @@ public final class WebCraftDesignsMod {
                 "skin", (WebCraftReadRoute.PublicRoute) profileSkins::read));
     }
 
-    private void load(ServerStartedEvent event) {
+    private void load() {
         banners.load(id("banners"));
         armor.load(id("armor"));
         armorGeometry.load(id("armor_geometry"));
